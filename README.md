@@ -36,14 +36,14 @@ This project uses the **LGPL** and **MIT**license.
 
 
 - [✨ Features](#-features)  
-- [🚀 Quick Start](#-quick-start)
- - [Windows](#-Windows)
- - [Linux](#-Linux) 
+- [🚀 Quick Start](#-quick-start).                                                             
+   - [Windows](#-Windows)
+   - [Linux](#-Linux) 
 - [🛠 Author](#-author)  
 
 
 
----
+---    
 
 ## ✨ Features  
 
