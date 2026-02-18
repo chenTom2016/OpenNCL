@@ -36,9 +36,7 @@ This project uses the **LGPL** and **MIT**license.
 
 
 - [✨ Features](#-features)  
-- [🚀 Quick Start](#-quick-start).                                                             
-           - [Windows](#-Windows)
-           - [Linux](#-Linux) 
+- [🚀 Quick Start](#-quick-start).                                                            
 - [🛠 Author](#-author)  
 
 
@@ -137,6 +135,8 @@ Linux:
 - Author: **Tom (chenTom2016)**  
 - GitHub: [chenTom2016](https://github.com/chenTom2016)
 - Contact Us:**OpenNCL@outlook.com**  
+
+---
 
 ---
 
