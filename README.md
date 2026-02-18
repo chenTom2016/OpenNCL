@@ -37,8 +37,8 @@ This project uses the **LGPL** and **MIT**license.
 
 - [✨ Features](#-features)  
 - [🚀 Quick Start](#-quick-start).                                                             
-   - [Windows](#-Windows)
-   - [Linux](#-Linux) 
+           - [Windows](#-Windows)
+           - [Linux](#-Linux) 
 - [🛠 Author](#-author)  
 
 
