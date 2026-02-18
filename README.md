@@ -138,8 +138,6 @@ Linux:
 
 ---
 
----
-
 This webpage was last updated on **February 18, 2026**.
 
 
