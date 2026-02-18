@@ -36,8 +36,9 @@ This project uses the **LGPL** and **MIT**license.
 
 
 - [✨ Features](#-features)  
-- [🚀 Quick Start](#-quick-start)  
-- [📷 Screenshots](#-screenshots)  
+- [🚀 Quick Start](#-quick-start)
+ - [Windows](#-Windows)
+ - [Linux](#-Linux) 
 - [🛠 Author](#-author)  
 
 
@@ -139,7 +140,7 @@ Linux:
 
 ---
 
-This webpage was last updated on **February 5, 2026**.
+This webpage was last updated on **February 18, 2026**.
 
 
 
