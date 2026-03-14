@@ -35,9 +35,10 @@ This project uses the **LGPL** and **MIT**license.
 ## 📑 Navigation
 
 
-- [✨ Features](#-features)  
-- [🚀 Quick Start](#-quick-start).                                                            
-- [🛠 Author](#-author)  
+- [Features](#-features)  
+- [Quick Start](#-quick-start)                                                         
+- [Author](#-author)
+  
 
 
 
@@ -94,6 +95,41 @@ This project uses the **LGPL** and **MIT**license.
   - Lightweight interpreter with variables, expressions, conditions, REPL  
 
 ---
+
+### Dependency Installation
+
+```bash
+pip install colorama pillow cryptography googletrans==3.1.0a0 requests qrcode
+```
+
+### Running OpenNCL
+
+1.  Download and extract the project files.
+2.  Navigate to the project root directory.
+3.  Run the main program:
+
+    ```bash
+    python OpenNCL.py
+    ```
+
+## Contributing
+
+Contributions to the OpenNCL project are welcome! If you have any feature suggestions, bug reports, or code improvements, please feel free to submit a Pull Request or Issue.
+
+## License
+
+This project is licensed under the MIT License. See the `LICENSE.txt` file for details.
+
+## Contact
+
+- **Author**: ChenTom2016
+- **Maintainer**: Manus AI
+- **Last Updated**: March 14, 2026
+
+
+
+
+
 
 ## 🚀 Quick Start  
 
