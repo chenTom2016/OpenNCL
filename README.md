@@ -123,7 +123,7 @@ This project is licensed under the MIT License. See the `LICENSE.txt` file for d
 ## Contact
 
 - **Author**: ChenTom2016
-- **Maintainer**: Manus AI
+- **Maintainer**: ChenTom2016
 - **Last Updated**: March 14, 2026
 
 
