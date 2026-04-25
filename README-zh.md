@@ -151,4 +151,4 @@ pip install tkinter pillow qrcode cryptography googletrans==4.0.0-rc1 colorama r
 
 ---
 
-如需进一步自定义内容，请告知！
+此页面为AI翻译，可能翻译不正确。
