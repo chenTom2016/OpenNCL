@@ -1,5 +1,7 @@
 # OpenNCL
 
+(English | 中文[README_CN])
+
 
   <b>A multifunctional Python-based Command Line Tool</b><br>
   <i>A powerful Python CLI utility with multiple features</i>
