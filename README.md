@@ -110,7 +110,9 @@ pip install colorama pillow cryptography googletrans==3.1.0a0 requests qrcode
 
 You can use Git:
 
-```bash```
+```bash
+
+git clone https://github.com/chenTom2016/OpenNCL.git```
 
 
 
