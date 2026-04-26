@@ -87,7 +87,9 @@ pip install colorama pillow cryptography googletrans==3.1.0a0 requests qrcode
 1. 下载并解压项目文件。
 你可以使用```Git```
 
-```git clone
+```bash
+git clone https://github.com/chenTom2016/OpenNCL.git
+```
 
 
 ```
