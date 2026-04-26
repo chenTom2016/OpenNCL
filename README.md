@@ -1,6 +1,6 @@
 # OpenNCL
 
-( English |[ 简体中文 ]( #-README_zh.md ) )
+( English |[ 简体中文 ]( README_zh.md ) )
 
 
   <b>A multifunctional Python-based Command Line Tool</b><br>
