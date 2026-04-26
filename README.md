@@ -112,7 +112,8 @@ You can use Git:
 
 ```bash
 
-git clone https://github.com/chenTom2016/OpenNCL.git```
+git clone https://github.com/chenTom2016/OpenNCL.git
+```
 
 
 
