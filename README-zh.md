@@ -1,6 +1,6 @@
 # OpenNCL 简体中文版说明
 
-(  ［ English ］ （ -README.md ）|简体中文  )
+( 简体中文 |[ English ]( README.md ) )
 
 <b>多功能 Python 命令行工具</b><br>
 <i>功能强大的多用途 Python 命令行应用</i>
