@@ -107,6 +107,15 @@ pip install colorama pillow cryptography googletrans==3.1.0a0 requests qrcode
 ### Running OpenNCL
 
 1.  Download and extract the project files.
+
+You can use Git:
+
+```bash```
+
+
+
+
+
 2.  Navigate to the project root directory.
 3.  Run the main program:
 
