@@ -92,7 +92,6 @@ git clone https://github.com/chenTom2016/OpenNCL.git
 ```
 
 
-```
 2. 进入项目根目录。
 3. 运行主程序：
 
