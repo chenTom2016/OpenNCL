@@ -71,7 +71,7 @@ namespace OpenNCL_Lancher
             "google","bing","youtube","open","ip","encrypt","decrypt","install",
             "cmd","powershell","explorer","notepad","control","taskmgr","mspaint","regedit",
             "mode pro","x++","linux","wsl","sandbox","logo","bridge start","edit","translate",
-            "calculator","screenshot","qrcode","kill","search","terminfo"
+            "calculator","screenshot","qrcode","kill","search","terminfo","diag"
         };
 
         public MainWindow()
@@ -390,6 +390,7 @@ namespace OpenNCL_Lancher
             if (c.StartsWith("calc ") || c.StartsWith("calculate ")) return Calc(cmd);
             if (c.StartsWith("install ")) return "Package: " + cmd[8..];
             if (Regex.IsMatch(c, @"^color\(\s*\w+\s*,\s*\w+\s*\)$")) return SetColor(cmd);
+            if (c == "diag") return Diag();
             if (c == "terminfo") return TermInfo();
             if (c.StartsWith("google ")) return Search(cmd, "google");
             if (c.StartsWith("bing ")) return Search(cmd, "bing");
@@ -423,7 +424,7 @@ namespace OpenNCL_Lancher
             return null;
         }
 
-        static string Help() => "==================================================\n  OpenNCL v4.0  |  Command Reference\n==================================================\n  help/about  version/ver  date/time  dir/ls  pwd  cd <p>\n  sysinfo  ip  modules  clear/cls  exit/quit\n  calc <e>  echo <t>  encrypt/decrypt <t>\n  color(fg,bg)  terminfo\n  google/bing/youtube <q>  open <url>\n  search <name>  kill <proc>  cmd/powershell/explorer...\n  mode pro  X++  logo  sandbox  bridge  edit  linux\n  config about <k> <v>  edit about  config about show\n==================================================";
+        static string Help() => "==================================================\n  OpenNCL v4.0  |  Command Reference\n==================================================\n  help/about  version/ver  date/time  dir/ls  pwd  cd <p>\n  sysinfo  ip  modules  clear/cls  exit/quit\n  calc <e>  echo <t>  encrypt/decrypt <t>\n  color(fg,bg)  terminfo  diag\n  google/bing/youtube <q>  open <url>\n  search <name>  kill <proc>  cmd/powershell/explorer...\n  mode pro  X++  logo  sandbox  bridge  edit  linux\n  config about <k> <v>  edit about  config about show\n==================================================";
         static string About() { var c = LoadCfg(); return $"{c.title}\n==========================================\nAuthor   : {c.author}\nPlatform : {c.platform}\nKernel   : {c.kernel}\n==========================================\n  {c.footer}\n  {c.github}"; }
 
         static string DirText() { try { var l = new List<string> { Environment.CurrentDirectory }; foreach (var d in Directory.GetDirectories(Environment.CurrentDirectory)) l.Add("  [DIR]  " + Path.GetFileName(d)); foreach (var f in Directory.GetFiles(Environment.CurrentDirectory)) { var fi = new FileInfo(f); l.Add($"  {fi.Length,8:N0}  {fi.Name}"); } return string.Join("\n", l); } catch (Exception e) { return "[ERROR] " + e.Message; } }
@@ -474,6 +475,30 @@ namespace OpenNCL_Lancher
                     (byte)(bg.B / 2 + fg.B / 2)));
             }
             return $"Theme: fg={fgName} bg={bgName}\nType \"terminfo\" for current settings.";
+        }
+
+        private string Diag()
+        {
+            var c = LoadCfg();
+            var lines = new List<string>
+            {
+                "  Diagnostics",
+                "  ===========",
+                "",
+                "  C# Engine   : OK (43 built-in commands)",
+                $"  Python      : {(_launcher.KernelReady ? "Connected (handshake OK)" : _launcher.IsRunning ? "Process running, handshake pending..." : "Not running")}",
+                $"  Last Error  : {_launcher.LastError ?? "none"}",
+                $"  Process     : {(_launcher.IsRunning ? "alive" : "dead")}",
+                $"  Mode        : {_mode}",
+                $"  CWD         : {Environment.CurrentDirectory}",
+                $"  History     : {_history.Count} entries",
+                $"  Commands    : {_cmdCount} executed",
+                $"  Brand       : {c.title}",
+                "",
+                "  Forwarded commands (need Python): x++, logo, sandbox, bridge, edit, translate, qrcode",
+                "  Try: help | about | dir | sysinfo | date | pwd | terminfo | diag",
+            };
+            return string.Join("\n", lines);
         }
 
         private string TermInfo()
