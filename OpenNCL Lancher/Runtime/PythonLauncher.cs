@@ -20,17 +20,22 @@ namespace OpenNCL_Lancher.Runtime
         private Task? _readTask;
         private Task? _readErrTask;
         private volatile bool _isReady;
+        private volatile bool _kernelReady;
+        private TaskCompletionSource<bool>? _readyTcs;
 
         public event Action<string>? OutputReceived;
         public event Action? ProcessExited;
         public bool IsRunning => _pythonProcess != null && !_pythonProcess.HasExited;
         public bool IsReady => _isReady;
+        public bool KernelReady => _kernelReady;
         public string? LastError { get; private set; }
 
         public async Task<bool> StartAsync()
         {
             if (IsRunning) return true;
             LastError = null;
+            _kernelReady = false;
+            _readyTcs = new TaskCompletionSource<bool>();
 
             try
             {
@@ -56,6 +61,7 @@ namespace OpenNCL_Lancher.Runtime
                 _pythonProcess.Exited += (s, e) =>
                 {
                     _isReady = false;
+                    _kernelReady = false;
                     ProcessExited?.Invoke();
                 };
 
@@ -69,8 +75,15 @@ namespace OpenNCL_Lancher.Runtime
                 _readErrTask = Task.Run(() => ReadErrorLoop(_cts.Token));
 
                 _isReady = true;
-                await Task.Delay(200);
-                return true;
+
+                var timeoutTask = Task.Delay(5000);
+                var completed = await Task.WhenAny(_readyTcs.Task, timeoutTask);
+                _kernelReady = completed == _readyTcs.Task;
+
+                if (!_kernelReady)
+                    LastError = "Kernel handshake timeout (5s)";
+
+                return _kernelReady;
             }
             catch (Exception ex)
             {
@@ -193,6 +206,14 @@ namespace OpenNCL_Lancher.Runtime
 
         private void OnOutputReceived(string text)
         {
+            if (!_kernelReady && text.Contains("__READY__"))
+            {
+                _kernelReady = true;
+                _readyTcs?.TrySetResult(true);
+                text = text.Replace("__READY__\n", "").Replace("__READY__\r\n", "").Replace("__READY__", "");
+                if (string.IsNullOrWhiteSpace(text)) return;
+            }
+
             lock (_bufferLock)
             {
                 _outputBuffer.Append(text);

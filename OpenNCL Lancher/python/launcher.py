@@ -7,6 +7,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from kernel.openncl_kernel import OpenNCLKernel
 
 kernel = OpenNCLKernel()
+sys.stdout.write("__READY__\n")
+sys.stdout.flush()
 while True:
     try:
         line = sys.stdin.readline()

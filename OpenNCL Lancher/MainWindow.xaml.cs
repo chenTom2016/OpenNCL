@@ -297,13 +297,13 @@ namespace OpenNCL_Lancher
             {
                 if (online)
                 {
-                    Out("  │  [OK] Python kernel connected.", _fg);
+                    Out("  |  [OK] Python kernel connected (handshake OK).", _fg);
                     StatusText.Text = "Online";
                 }
                 else
                 {
-                    var err = _launcher.LastError ?? "Unknown error";
-                    Out("  │  [WARN] Python kernel offline: " + err, _err);
+                    var err = _launcher.LastError ?? "python not found or script missing";
+                    Out("  |  [WARN] Python kernel offline: " + err, _err);
                     StatusText.Text = "Kernel offline";
                 }
             });
@@ -349,7 +349,8 @@ namespace OpenNCL_Lancher
             var ms = _sw.Elapsed.TotalMilliseconds;
             var perf = ms < 0.5 ? "" : $" [{ms:F1}ms]";
 
-            if (r == null) { if (perf.Length > 0) Out(perf, _dim); TryForward(cmd); return; }
+            if (r == null) { var hint = Suggest(cmd); if (hint != null) Out("  Did you mean \"" + hint + "\"?", _dim); TryForward(cmd); return; }
+            if (r == "__FORWARD__") { TryForward(cmd); return; }
             if (r == "__OK__") { if (perf.Length > 0) Out("  OK" + perf, _dim); return; }
             if (r == "__CLEAR__") { TerminalOutput.Blocks.Clear(); _cmdCount = 0; CmdCountText.Text = "0 commands"; FillViewport(); RenderPrompt(); return; }
             if (r == "__EXIT__") { HandleExit(); return; }
@@ -359,11 +360,8 @@ namespace OpenNCL_Lancher
 
         private void TryForward(string cmd)
         {
-            if (_launcher.IsReady) { _launcher.SendCommand(cmd); return; }
-            AppendError("Unknown command: " + cmd);
-            var hint = Suggest(cmd);
-            if (hint != null) Out("  Did you mean \"" + hint + "\"?", _dim);
-            Out("  Type \"help\" for available commands.", _dim);
+            if (_launcher.KernelReady) { _launcher.SendCommand(cmd); return; }
+            Out("  [WARN] Python kernel offline — cannot forward: " + cmd, _dim);
         }
 
         private void HandleExit()
@@ -407,19 +405,19 @@ namespace OpenNCL_Lancher
             if (c.StartsWith("kill ")) return KillProc(cmd[5..].Trim());
             if (IsSys(c)) { LaunchSys(c); return "__OK__"; }
             if (c == "mode pro") { _mode = "pro"; _accent = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 165, 0)); ModeIndicator.Text = "pro"; ModeIndicator.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 169, 77)); return "Entering Professional Mode.\nType \"exit\" to return."; }
-            if (c == "x++") { if (_launcher.IsReady) _launcher.SendCommand(cmd); return null; }
-            if (c.StartsWith("logo ")) { if (_launcher.IsReady) _launcher.SendCommand(cmd); return null; }
-            if (c.StartsWith("sandbox ")) { if (_launcher.IsReady) _launcher.SendCommand(cmd); return null; }
-            if (c == "bridge start") { if (_launcher.IsReady) _launcher.SendCommand(cmd); return null; }
+            if (c == "x++") return "__FORWARD__";
+            if (c.StartsWith("logo ")) return "__FORWARD__";
+            if (c.StartsWith("sandbox ")) return "__FORWARD__";
+            if (c == "bridge start") return "__FORWARD__";
             if (c.StartsWith("edit about")) return EditAboutFile();
             if (c.StartsWith("config about show")) return ShowAboutCfg();
             if (c.StartsWith("config about ")) return EditAboutCfg(cmd[13..].Trim());
             if (c.StartsWith("config prompt ")) return SetPrompt(cmd[14..].Trim(), false);
             if (c.StartsWith("config pro_prompt ")) return SetPrompt(cmd[18..].Trim(), true);
-            if (c.StartsWith("edit ")) { if (_launcher.IsReady) _launcher.SendCommand(cmd); return null; }
-            if (c.StartsWith("translate ")) { if (_launcher.IsReady) _launcher.SendCommand(cmd); return null; }
+            if (c.StartsWith("edit ")) return "__FORWARD__";
+            if (c.StartsWith("translate ")) return "__FORWARD__";
             if (c is "linux" or "wsl") return WslStatus();
-            if (c == "qrcode") { if (_launcher.IsReady) _launcher.SendCommand(cmd); return null; }
+            if (c == "qrcode") return "__FORWARD__";
             if (c.StartsWith("/")) return "Use OpenNCL commands. Type \"help\".";
             if (Regex.IsMatch(c, @"^https?://")) { OpenDirect(c); return "__OK__"; }
             return null;
@@ -429,7 +427,7 @@ namespace OpenNCL_Lancher
         static string About() { var c = LoadCfg(); return $"{c.title}\n==========================================\nAuthor   : {c.author}\nPlatform : {c.platform}\nKernel   : {c.kernel}\n==========================================\n  {c.footer}\n  {c.github}"; }
 
         static string DirText() { try { var l = new List<string> { Environment.CurrentDirectory }; foreach (var d in Directory.GetDirectories(Environment.CurrentDirectory)) l.Add("  [DIR]  " + Path.GetFileName(d)); foreach (var f in Directory.GetFiles(Environment.CurrentDirectory)) { var fi = new FileInfo(f); l.Add($"  {fi.Length,8:N0}  {fi.Name}"); } return string.Join("\n", l); } catch (Exception e) { return "[ERROR] " + e.Message; } }
-        string? ChangeDir(string cmd) { var p = cmd[3..].Trim().Trim('"'); if (string.IsNullOrEmpty(p)) return Environment.CurrentDirectory; try { Environment.CurrentDirectory = Path.GetFullPath(p); if (_launcher.IsReady) _launcher.SendCommand("cd " + Environment.CurrentDirectory); return Environment.CurrentDirectory; } catch (Exception e) { return "[ERROR] " + e.Message; } }
+        string? ChangeDir(string cmd) { var p = cmd[3..].Trim().Trim('"'); if (string.IsNullOrEmpty(p)) return Environment.CurrentDirectory; try { Environment.CurrentDirectory = Path.GetFullPath(p); if (_launcher.KernelReady) _launcher.SendCommand("cd " + Environment.CurrentDirectory); return Environment.CurrentDirectory; } catch (Exception e) { return "[ERROR] " + e.Message; } }
         static string Sys() => $"OS       : {Environment.OSVersion}\nMachine  : {Environment.MachineName}\nUser     : {Environment.UserName}\nCPU      : {Environment.ProcessorCount} cores ({(Environment.Is64BitOperatingSystem ? "x64" : "x86")})\nCLR      : {Environment.Version}\nDir      : {Environment.CurrentDirectory}";
         static string GetIp() { try { using var h = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(3) }; return "Public IP: " + h.GetStringAsync("https://api.ipify.org").Result.Trim(); } catch { return "[ERROR] Cannot reach api.ipify.org."; } }
         static string Calc(string raw) { var e = Regex.Replace(raw, @"^(calc|calculate)\s+", "", RegexOptions.IgnoreCase).Replace("\u00d7", "*").Replace("\u00f7", "/").Replace("^", "**"); try { return e + " = " + new System.Data.DataTable().Compute(e, null); } catch (Exception ex) { return "[ERROR] " + ex.Message; } }
@@ -481,7 +479,7 @@ namespace OpenNCL_Lancher
         private string TermInfo()
         {
             var c = LoadCfg();
-            return $"  Terminal Info\n  ---------------\n  Mode     : {_mode}\n  Prompt   : {Prompt().Trim()}\n  ProPrompt: {_proPromptStr.Trim()}\n  CWD      : {Environment.CurrentDirectory}\n  History  : {_history.Count} entries\n  Kernel   : {(_launcher.IsReady ? "online" : "offline")}\n  Brand    : {c.title}\n  Commands : {_cmdCount} executed";
+            return $"  Terminal Info\n  ---------------\n  Mode     : {_mode}\n  Prompt   : {Prompt().Trim()}\n  ProPrompt: {_proPromptStr.Trim()}\n  CWD      : {Environment.CurrentDirectory}\n  History  : {_history.Count} entries\n  Kernel   : {(_launcher.KernelReady ? "online" : "offline")}\n  Brand    : {c.title}\n  Commands : {_cmdCount} executed";
         }
 
         private string SetPrompt(string value, bool isPro)
