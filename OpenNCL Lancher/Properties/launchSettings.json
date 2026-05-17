@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "OpenNCL Lancher (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "OpenNCL Lancher (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

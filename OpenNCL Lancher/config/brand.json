@@ -1,0 +1,16 @@
+{
+  "about": {
+    "title": "OpenNCL  Open New Command Line OS  v4.0",
+    "author": "Chen Tom 2016",
+    "platform": "Windows + Python + .NET WinUI 3",
+    "kernel": "CL-Kernel v4.0 (Hybrid)",
+    "footer": "  \"Open source, open mind.\"",
+    "github": "github.com/chenTom2016"
+  },
+  "brand": {
+    "name": "OpenNCL",
+    "version": "v4.0",
+    "prompt": "openncl> ",
+    "pro_prompt": "root@Command:~# "
+  }
+}

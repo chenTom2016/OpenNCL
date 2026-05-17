@@ -1,0 +1,29 @@
+# Build output
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+*.winmd
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# IDE
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config (local)
+*.local.json

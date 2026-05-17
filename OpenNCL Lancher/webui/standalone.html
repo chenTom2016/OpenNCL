@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenNCL Terminal</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; overflow:hidden; }
+
+  body {
+    font-family: 'Cascadia Code','Consolas','SF Mono','Courier New',monospace;
+    font-size:13px;
+    line-height:1.55;
+    color:#b8b8c0;
+    background:#060608;
+    display:flex;
+    flex-direction:column;
+  }
+
+  body::after {
+    content:''; position:fixed; inset:0; z-index:9999; pointer-events:none;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.06) 0px, rgba(0,0,0,0.06) 1px, transparent 1px, transparent 2px);
+  }
+
+  body::before {
+    content:''; position:fixed; inset:0; z-index:0;
+    background:
+      radial-gradient(ellipse 60% 35% at 50% 38%, rgba(0,229,160,0.05) 0%, transparent 65%),
+      radial-gradient(ellipse 50% 50% at 80% 20%, rgba(77,171,247,0.03) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 40% at 20% 70%, rgba(160,120,255,0.03) 0%, transparent 60%);
+    pointer-events:none;
+  }
+
+  #topbar {
+    height:28px; background:rgba(10,10,16,0.9);
+    border-bottom:1px solid rgba(255,255,255,0.04);
+    display:flex; align-items:center; padding:0 14px; gap:20px;
+    position:relative; z-index:2;
+    -webkit-app-region:drag;
+  }
+  #topbar .dot-group { display:flex; gap:6px; flex-shrink:0; -webkit-app-region:no-drag; }
+  #topbar .dot { width:8px; height:8px; border-radius:50%; }
+  #topbar .dot.r { background:#ff5f57; }
+  #topbar .dot.y { background:#febc2e; }
+  #topbar .dot.g { background:#28c840; }
+  #topbar .title {
+    font-size:10px; color:rgba(255,255,255,0.25); letter-spacing:1px;
+    flex:1; text-align:center; -webkit-app-region:no-drag;
+  }
+  #topbar .kernel-badge {
+    font-size:9px; color:rgba(0,229,160,0.5); border:1px solid rgba(0,229,160,0.15);
+    padding:1px 8px; border-radius:3px; -webkit-app-region:no-drag;
+  }
+
+  #main { flex:1; position:relative; z-index:1; display:flex; flex-direction:column; }
+
+  #terminal {
+    flex:1; overflow-y:auto; padding:16px 22px 50px;
+    font-family:inherit; font-size:inherit;
+    white-space:pre-wrap; word-break:break-all;
+    outline:none;
+  }
+  #terminal::-webkit-scrollbar { width:4px; }
+  #terminal::-webkit-scrollbar-track { background:transparent; }
+  #terminal::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.06); border-radius:4px; }
+  #terminal::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,0.1); }
+
+  .line { padding:0.5px 0; animation:slideIn .12s ease; }
+  @keyframes slideIn { from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:translateX(0)} }
+
+  .logo {
+    font-weight:700; letter-spacing:-0.3px;
+    background:linear-gradient(90deg,#ff6b6b 0%,#ffa94d 16%,#ffd43b 33%,#69db7c 50%,#4dabf7 66%,#9775fa 83%,#f06595 100%);
+    background-size:400% 100%;
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+    background-clip:text;
+    animation:rainbowShift 5s linear infinite;
+  }
+  @keyframes rainbowShift { 0%{background-position:0% 50%} 100%{background-position:400% 50%} }
+
+  .logo-dim {
+    font-size:11px; letter-spacing:1.5px;
+    background:linear-gradient(90deg,#4dabf7,#69db7c);
+    background-size:200% 100%;
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+    background-clip:text;
+  }
+
+  .prompt { color:#00e5a0; text-shadow:0 0 6px rgba(0,229,160,0.3); }
+  .kernel { color:#4dabf7; }
+  .error  { color:#ff6b6b; }
+  .result { color:#b8b8c0; }
+  .version{ color:#ffa94d; }
+  .warn   { color:#ffd43b; }
+  .success{ color:#69db7c; }
+  .dim    { color:rgba(255,255,255,0.15); font-size:10px; }
+
+  .input-line { display:flex; align-items:baseline; margin-top:2px; }
+  .input-line .prefix {
+    color:#00e5a0; white-space:pre; flex-shrink:0;
+    text-shadow:0 0 6px rgba(0,229,160,0.3);
+  }
+  .input-line .cmd-text {
+    color:#c8c8d0; outline:none; flex:1; min-width:2px; word-break:break-all;
+    caret-color:#00e5a0;
+  }
+  .input-line .cmd-text:empty::after {
+    content:'_'; animation:cursorBlink .8s step-end infinite;
+    color:#00e5a0; opacity:0.7;
+  }
+  @keyframes cursorBlink { 0%,100%{opacity:0.7} 50%{opacity:0} }
+
+  #bottombar {
+    height:24px; background:rgba(10,10,16,0.9);
+    border-top:1px solid rgba(255,255,255,0.04);
+    display:flex; align-items:center; padding:0 14px; gap:20px;
+    position:relative; z-index:2; font-size:10px;
+  }
+  #bottombar span { color:rgba(255,255,255,0.2); }
+  #bottombar .cmd-cnt { margin-left:auto; }
+  #bottombar .mode { color:#ffa94d; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="dot-group">
+    <span class="dot r"></span>
+    <span class="dot y"></span>
+    <span class="dot g"></span>
+  </div>
+  <span class="title">openncl — Terminal</span>
+  <span class="kernel-badge">v4.0</span>
+</div>
+
+<div id="main">
+  <div id="terminal" onclick="focusInput()"></div>
+</div>
+
+<div id="bottombar">
+  <span class="mode" id="mode-indicator">normal</span>
+  <span id="status-text">Online</span>
+  <span class="cmd-cnt" id="cmd-count">0 commands</span>
+</div>
+
+<script>
+// ============ KERNEL v4.0 ============
+const kernel = {
+  history:[], modules:['math','net','fs','encrypt','qrcode','translate'], mode:'normal',
+  theme: { fg: '#b8b8c0', accent: '#00e5a0', err: '#ff6b6b', dim: 'rgba(255,255,255,0.15)' },
+  promptStr: 'openncl> ',
+  proPromptStr: 'root@Command:~# ',
+
+  exec(cmd){
+    this.history.push(cmd);
+    const raw=cmd.trim(), c=raw.toLowerCase(), args=raw.split(/\s+/).slice(1);
+
+    if(c==='help') return this._help();
+    if(c==='about') return this._about();
+    if(c==='exit'||c==='quit') return '__EXIT__';
+    if(c==='date'||c==='time') return new Date().toLocaleString();
+    if(c==='version'||c==='ver') return 'OpenNCL Kernel v4.0';
+    if(c==='dir'||c==='ls') return 'Directory: '+window.location.href+'\n(use native OpenNCL for filesystem access)';
+    if(c==='sysinfo'||c==='system') return this._sysinfo();
+    if(c==='ip') return this._ip();
+    if(c==='modules') return 'Installed modules: '+this.modules.join(', ');
+    if(c==='clear'||c==='cls') return '__CLEAR__';
+    if(c==='terminfo') return this._terminfo();
+    if(c==='pwd') return 'CWD: (browser) ' + window.location.href;
+
+    if(c.startsWith('echo ')) return raw.slice(5);
+    if(c.startsWith('calc ')||c.startsWith('calculate ')) return this._calc(raw);
+    if(c.startsWith('install ')) return 'Install "'+args[0]+'" (requires TomLang / native OpenNCL)';
+
+    if(/^color\(\s*\w+\s*,\s*\w+\s*\)$/i.test(c)) return this._color(raw);
+
+    // Search
+    if(c.startsWith('{search:google}:')||c.startsWith('google ')) return this._search(raw,'google');
+    if(c.startsWith('{search:bing}:')||c.startsWith('bing ')) return this._search(raw,'bing');
+    if(c.startsWith('{search:youtube}:')||c.startsWith('youtube ')) return this._search(raw,'youtube');
+    if(c.startsWith('{open:')||c.startsWith('open ')) return this._open(raw);
+
+    // Encrypt / Decrypt
+    if(c.startsWith('encrypt ')) return this._encrypt(raw);
+    if(c.startsWith('decrypt ')) return this._decrypt(raw);
+
+    // Pro mode
+    if(c==='mode pro') return this._pro();
+
+    // Config
+    if(c.startsWith('config prompt ')) return this._cfgPrompt(raw.slice(14), false);
+    if(c.startsWith('config pro_prompt ')) return this._cfgPrompt(raw.slice(18), true);
+
+    // X++ / Sandbox / Logo / Bridge / Edit / QR / Translate
+    if(c==='x++') return this._xpp();
+    if(c.startsWith('sandbox ')) return 'Sandbox: '+raw.slice(8)+'\n(requires native Python backend)';
+    if(c.startsWith('logo ')) return this._logo(raw);
+    if(c==='bridge start') return 'Bridge server would start on port 9090 (Python backend required)';
+    if(c.startsWith('edit ')) return 'Editor: '+raw.slice(5)+'\n(requires native OpenNCL)';
+    if(c.startsWith('qrcode ')) return this._qrcode(raw);
+    if(c.startsWith('translate ')) return this._translate(raw);
+    if(c.startsWith('kill ')) return 'kill: '+raw.slice(5)+'\n(requires native OpenNCL for process control)';
+
+    // System shortcuts
+    if(['cmd','powershell','explorer','notepad','control','taskmgr','calc.exe','mspaint','calculator','screenshot'].includes(c))
+      return 'System: '+c+' (available in native OpenNCL)';
+
+    if(c.startsWith('/')) return 'JackalClient /commands are native-only. Type "help" for OpenNCL commands.';
+
+    if(/^https?:\/\//i.test(c)){ window.open(c,'_blank'); return 'Opened: '+c; }
+
+    return 'Unknown: '+raw+'\nType "help" for available commands.';
+  },
+
+  _help(){
+    return [
+      '─'.repeat(52),
+      '  OpenNCL v4.0  |  Commands',
+      '─'.repeat(52),
+      '  help/about    version/ver   date/time     dir/ls',
+      '  sysinfo       ip            modules       pwd',
+      '  clear/cls     exit/quit     terminfo',
+      '',
+      '  calc <expr>   echo <text>   encrypt/decrypt <text>',
+      '  color(fg,bg)  config prompt <text>',
+      '',
+      '  google/bing/youtube <query>   open <url>',
+      '  qrcode <text>   translate <from> <to> <text>',
+      '',
+      '  mode pro      X++           logo show <img>',
+      '  sandbox/logo/bridge/edit (Python backend)',
+      '',
+      '─'.repeat(52),
+    ].join('\n');
+  },
+
+  _about(){
+    return [
+      'OpenNCL  Open New Command Line OS  v4.0',
+      '─'.repeat(42),
+      'Author   : Chen Tom 2016',
+      'Platform : Web + Python + .NET WinUI 3',
+      'Kernel   : CL-Kernel v4.0 (Hybrid)',
+      '─'.repeat(42),
+      '  "Open source, open mind."',
+    ].join('\n');
+  },
+
+  _sysinfo(){
+    return [
+      'Platform : '+navigator.platform,
+      'Browser  : '+navigator.userAgent.substring(0,70)+'...',
+      'Online   : '+navigator.onLine,
+      'Language : '+navigator.language,
+      'Cores    : '+navigator.hardwareConcurrency,
+      'Memory   : '+(navigator.deviceMemory||'?')+' GB',
+      'Screen   : '+screen.width+'x'+screen.height,
+      'Vendor   : '+navigator.vendor,
+    ].join('\n');
+  },
+
+  _ip(){
+    return 'Fetching public IP... (requires network, use native OpenNCL for reliable results)';
+  },
+
+  _terminfo(){
+    return [
+      'Terminal Info',
+      '------------',
+      'Mode     : '+this.mode,
+      'Prompt   : '+this.promptStr.trim(),
+      'ProPrompt: '+this.proPromptStr.trim(),
+      'History  : '+this.history.length+' entries',
+      'Theme    : fg='+this.theme.fg+' accent='+this.theme.accent,
+      'Modules  : '+this.modules.join(', '),
+    ].join('\n');
+  },
+
+  _calc(raw){
+    let e=raw.replace(/^(calc|calculate)\s+/i,'').replace(/×/g,'*').replace(/÷/g,'/').replace(/\^/g,'**');
+    try{ const r=Function('"use strict";return('+e+')')(); return e+' = '+r; }
+    catch(ex){ return 'Error: '+ex.message; }
+  },
+
+  _color(raw){
+    const m=raw.match(/color\((.*),(.*)\)/i);
+    if(!m) return 'Usage: color(fg,bg)  e.g. color(red,black)';
+    const names={black:'#0a0a0a',red:'#ff6b6b',green:'#69db7c',blue:'#4dabf7',yellow:'#ffd43b',cyan:'#44d4c8',magenta:'#cc44ff',white:'#dcdcdc',gray:'#808080',orange:'#ffa94d',purple:'#a078ff'};
+    const fg=names[m[1].trim().toLowerCase()]||m[1].trim();
+    const bg=names[m[2].trim().toLowerCase()]||m[2].trim();
+    this.theme.fg=fg; this.theme.accent=fg;
+    document.body.style.background=bg;
+    document.querySelector('.input-line .prefix').style.color=fg;
+    document.querySelector('.input-line .cmd-text').style.caretColor=fg;
+    return 'Theme: fg='+m[1].trim()+' bg='+m[2].trim()+'\nType "terminfo" to see current settings.';
+  },
+
+  _search(raw,engine){
+    let q=raw.replace(/\{(search:(google|bing|youtube))?\}:\s*/i,'').replace(/^(google|bing|youtube)\s+/i,'');
+    if(!q) return 'Usage: '+engine+' <query>';
+    const u={google:'https://www.google.com/search?q=',bing:'https://www.bing.com/search?q=',youtube:'https://www.youtube.com/results?search_query='};
+    window.open(u[engine]+encodeURIComponent(q),'_blank');
+    return 'Opened '+engine+' search: '+q;
+  },
+
+  _open(raw){
+    let url=raw.replace(/^\{open:\s*/i,'').replace(/\}$/,'').replace(/^open\s+/i,'').trim();
+    if(!url) return 'Usage: open <url>';
+    if(!/^https?:\/\//i.test(url)) url='https://'+url;
+    window.open(url,'_blank'); return 'Opened: '+url;
+  },
+
+  _encrypt(raw){ const t=raw.replace(/^encrypt\s+/i,''); if(!t) return 'Usage: encrypt <text>'; return 'Base64: '+btoa(unescape(encodeURIComponent(t))); },
+  _decrypt(raw){ const t=raw.replace(/^decrypt\s+/i,''); if(!t) return 'Usage: decrypt <text>'; try{return 'Decoded: '+decodeURIComponent(escape(atob(t)));}catch(e){return 'Error: invalid base64';} },
+
+  _pro(){
+    this.mode='pro'; updateModeUI();
+    document.querySelector('.input-line .prefix').style.color='#ffa94d';
+    return 'Entering Professional Mode...\n  Commands: ping, scan, encrypt, open\n  Type "exit" to return.';
+  },
+
+  _cfgPrompt(val, isPro){
+    if(!val.trim()) return 'Usage: config '+(isPro?'pro_':'')+'prompt <text>';
+    if(isPro) this.proPromptStr = val.trim() + ' ';
+    else this.promptStr = val.trim() + ' ';
+    return (isPro?'Pro p':'P')+'rompt updated: "'+val.trim()+'"';
+  },
+
+  _xpp(){
+    return [
+      'X++ Interpreter v0.4  Interactive Mode',
+      '  x = input()     get input',
+      '  x = <expr>      assign variable',
+      '  print(<expr>)   print expression',
+      '  if <cond>: { } else { }',
+      'Type "exit" to quit X++ mode.',
+    ].join('\n');
+  },
+
+  _logo(raw){
+    const a=raw.split(/\s+/);
+    if(a.length<3) return 'Usage: logo show <path> [width]\n       logo save <path> [width]';
+    if(a[1]==='show') return 'ASCII art: '+a[2]+' (requires Python PIL backend)';
+    if(a[1]==='save') return 'Saving '+a[2]+' to ascii_logo_color.txt (requires Python PIL)';
+    return 'Unknown: logo '+a[1];
+  },
+
+  _qrcode(raw){
+    const text=raw.slice(7).trim();
+    if(!text) return 'Usage: qrcode <text or url>';
+    return 'QR Code for: '+text+'\n(Use native OpenNCL for in-terminal QR rendering)\nWeb preview: https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='+encodeURIComponent(text);
+  },
+
+  _translate(raw){
+    const parts=raw.split(/\s+/).slice(1);
+    if(parts.length<3) return 'Usage: translate <from> <to> <text>\nExample: translate en zh Hello world';
+    const src=parts[0], tgt=parts[1], text=parts.slice(2).join(' ');
+    return '['+src+'→'+tgt+']: '+text+'\n(Auto-translation requires googletrans Python module)';
+  },
+};
+
+// ============ UI ============
+const hist=[];
+let histIdx=-1, currentInputLine=null;
+const $term=document.getElementById('terminal');
+const $modeInd=document.getElementById('mode-indicator');
+const $statTxt=document.getElementById('status-text');
+const $cmdCnt=document.getElementById('cmd-count');
+let cmdCount=0;
+
+function updateModeUI(){
+  $modeInd.textContent = kernel.mode;
+  $modeInd.className = kernel.mode==='pro' ? 'mode' : '';
+}
+
+function append(text,cls){
+  if(!text) return;
+  const d=document.createElement('div');
+  d.className='line '+(cls||'');
+  d.textContent=text;
+  $term.appendChild(d);
+  $term.scrollTop=$term.scrollHeight;
+}
+
+function createInputLine(){
+  const w=document.createElement('div');
+  w.className='line input-line';
+  const p=document.createElement('span');
+  p.className='prefix';
+  p.textContent=kernel.mode==='pro' ? kernel.proPromptStr : kernel.promptStr;
+  if(kernel.mode==='pro') p.style.color='#ffa94d';
+  else p.style.color=kernel.theme.accent;
+  w.appendChild(p);
+  const t=document.createElement('span');
+  t.className='cmd-text';
+  t.contentEditable='true'; t.spellcheck=false;
+  t.setAttribute('role','textbox');
+  t.style.caretColor=kernel.mode==='pro'?'#ffa94d':kernel.theme.accent;
+  t.addEventListener('keydown',onInputKey);
+  t.addEventListener('paste',e=>{
+    e.preventDefault();
+    document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text/plain'));
+  });
+  w.appendChild(t);
+  $term.appendChild(w);
+  $term.scrollTop=$term.scrollHeight;
+  currentInputLine=t; t.focus();
+}
+
+function onInputKey(e){
+  const el=e.target;
+  if(e.key==='Enter'){
+    e.preventDefault();
+    const cmd=el.textContent.trim();
+    el.contentEditable='false'; el.style.color=kernel.theme.accent; el.style.textShadow='0 0 4px rgba(0,229,160,0.2)';
+    currentInputLine=null;
+
+    hist.push(cmd); histIdx=-1; cmdCount++; $cmdCnt.textContent=cmdCount+' cmd';
+    if(!cmd){ createInputLine(); return; }
+
+    const out=kernel.exec(cmd);
+    if(out==='__CLEAR__'){ $term.innerHTML=''; cmdCount=0; $cmdCnt.textContent='0 cmd'; createInputLine(); return; }
+    if(out==='__EXIT__'){
+      if(kernel.mode==='pro'){
+        kernel.mode='normal'; updateModeUI(); append('Exiting pro mode...','warn');
+      }else{
+        append('Session ended. Restarting...','dim');
+        setTimeout(()=>{$term.innerHTML='';cmdCount=0;$cmdCnt.textContent='0 cmd';boot();},1500);
+        return;
+      }
+      createInputLine(); return;
+    }
+
+    out.split('\n').forEach(line=>{
+      let cls='result';
+      if(line.startsWith('Error')||line.startsWith('[ERROR]')) cls='error';
+      else if(line.startsWith('[')) cls='kernel';
+      else if(line.startsWith('OpenNCL')) cls='version';
+      else if(line.startsWith('Entering')||line.startsWith('Exiting')) cls='warn';
+      else if(line.startsWith('Theme:')) cls='success';
+      else if(line.startsWith('  │')) cls='kernel';
+      append(line,cls);
+    });
+    createInputLine();
+  }else if(e.key==='ArrowUp'){
+    e.preventDefault();
+    if(hist.length){ histIdx=histIdx<0?hist.length-1:Math.max(0,histIdx-1); el.textContent=hist[histIdx]; placeCaretEnd(el); }
+  }else if(e.key==='ArrowDown'){
+    e.preventDefault();
+    if(histIdx>=0){ histIdx++; el.textContent=histIdx<hist.length?hist[histIdx]:''; placeCaretEnd(el); }
+  }
+}
+
+function placeCaretEnd(el){const r=document.createRange(),s=window.getSelection();r.selectNodeContents(el);r.collapse(false);s.removeAllRanges();s.addRange(r);}
+function focusInput(){if(currentInputLine) currentInputLine.focus();}
+
+function boot(){
+  const logo=[
+    '          ██████╗ ██████╗ ███████╗███╗   ██╗███╗   ██╗ ██████╗██╗     ',
+    '         ██╔═══██╗██╔══██╗██╔════╗████╗  ██║████╗  ██║██╔════╗██║     ',
+    '         ██║   ██║██████╔╗█████╗  ██╔██╗ ██║██╔██╗ ██║██║     ██║     ',
+    '         ██║   ██║██╔═══╗ ██╔══╗  ██║╚██╗██║██║╚██╗██║██║     ██║     ',
+    '         ╚██████╔╗██║     ███████╗██║ ╚████║██║ ╚████║╚██████╗███████╗',
+    '          ╚═════╗ ╚═╗     ╚══════╗╚═╗  ╚═══╗╚═╗  ╚═══╗ ╚═════╗╚══════╗',
+  ];
+  logo.forEach(l=>append(l,'logo'));
+  append('                        Open New Command Line  v4.0','logo-dim');
+  append('');
+  append('   │  Kernel v4.0  [Online]','kernel');
+  append('   │  Type "help" for commands.','result');
+  append('');
+  createInputLine();
+}
+
+boot();
+</script>
+</body>
+</html>

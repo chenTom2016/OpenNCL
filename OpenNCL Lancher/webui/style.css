@@ -1,0 +1,97 @@
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: #0a0a0a;
+    color: #dcdcdc;
+    font-family: "Cascadia Code", "Consolas", "Courier New", monospace;
+    font-size: 14px;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.scanlines {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(to bottom,
+        rgba(255,255,255,0.015) 0%, transparent 50%, rgba(0,0,0,0.05) 100%);
+    background-size: 100% 4px;
+    pointer-events: none;
+    z-index: 10;
+}
+
+#terminal {
+    width: 100%;
+    max-width: 960px;
+    height: 100vh;
+    padding: 24px 28px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+}
+
+#output {
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.6;
+}
+
+#output .logo-line { color: #0f0; }
+#output .logo-line:nth-child(2) { color: #0ff; }
+#output .logo-line:nth-child(4) { color: #ff0; }
+#output .logo-line:nth-child(5) { color: #f0f; }
+#output .logo-line:nth-child(6),
+#output .logo-line:nth-child(7) { color: #ff6600; }
+
+#output .error { color: #ff4646; }
+#output .dim { color: #64646e; }
+#output .ok { color: #00e5a0; }
+
+#prompt-line {
+    display: flex;
+    align-items: center;
+    line-height: 1.6;
+    margin-top: 2px;
+}
+
+#path-display {
+    color: #8888aa;
+    white-space: pre;
+}
+
+#prompt-text {
+    color: #00e5a0;
+    white-space: pre;
+}
+
+#input-text {
+    color: #dcdcdc;
+    white-space: pre;
+}
+
+.cursor {
+    color: #00e5a0;
+    animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+#terminal::-webkit-scrollbar {
+    width: 6px;
+}
+
+#terminal::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#terminal::-webkit-scrollbar-thumb {
+    background: #222;
+    border-radius: 3px;
+}
+
+#terminal::-webkit-scrollbar-thumb:hover {
+    background: #333;
+}
