@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <linearGradient id="g" x1="220" y1="180" x2="820" y2="860" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0B102A"/>
+      <stop offset="0.35" stop-color="#0A1638"/>
+      <stop offset="0.7" stop-color="#14114A"/>
+      <stop offset="1" stop-color="#1E0B3A"/>
+    </linearGradient>
+    <radialGradient id="nebula" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(360 340) rotate(35) scale(620)">
+      <stop offset="0" stop-color="#2BE4FF" stop-opacity="0.24"/>
+      <stop offset="0.35" stop-color="#6A7BFF" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#8A2BE2" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="256" y1="220" x2="800" y2="820" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.42"/>
+      <stop offset="0.35" stop-color="#FFFFFF" stop-opacity="0.10"/>
+      <stop offset="0.7" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#7DF3FF" stop-opacity="0.12"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(360 320) rotate(55) scale(520)">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="glassSheen" x1="260" y1="240" x2="760" y2="740" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55"/>
+      <stop offset="0.28" stop-color="#FFFFFF" stop-opacity="0.16"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="26" flood-color="#0B0F2A" flood-opacity="0.35"/>
+    </filter>
+    <filter id="glassBlur" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="10" result="b"/>
+      <feColorMatrix in="b" type="matrix"
+        values="
+          1 0 0 0 0
+          0 1 0 0 0
+          0 0 1 0 0
+          0 0 0 0.55 0" result="o"/>
+      <feComposite in="o" in2="SourceGraphic" operator="over"/>
+    </filter>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+
+  <!-- Mark: gradient disc + subtle inner glow -->
+  <g filter="url(#shadow)">
+    <circle cx="512" cy="512" r="420" fill="url(#g)"/>
+    <circle cx="512" cy="512" r="420" fill="url(#nebula)"/>
+    <circle cx="512" cy="512" r="420" fill="url(#glow)"/>
+    <!-- Rim highlight -->
+    <circle cx="512" cy="512" r="416" fill="none" stroke="url(#rim)" stroke-width="10"/>
+  </g>
+
+  <!-- Liquid-glass layer: translucent blobs + specular streaks -->
+  <g filter="url(#glassBlur)">
+    <!-- upper-left blob -->
+    <path d="M284 420c0-140 120-236 256-236 98 0 176 34 236 92 42 40 68 94 68 154 0 166-164 272-340 248-142-20-220-110-220-258Z"
+          fill="url(#glassSheen)" fill-opacity="0.42"/>
+    <!-- bottom-right blob -->
+    <path d="M520 828c-168 0-296-88-296-230 0-92 46-162 124-204 62-34 142-44 222-28 156 30 256 136 256 278 0 120-102 184-206 184Z"
+          fill="#FFFFFF" fill-opacity="0.10"/>
+    <!-- specular streak -->
+    <path d="M300 360c140-120 292-146 424-126 50 8 92 22 124 40 18 10 22 30 10 46-10 14-28 18-44 10-118-58-306-50-502 118-16 14-36 12-48-4-12-16-10-36 6-48Z"
+          fill="#FFFFFF" fill-opacity="0.22"/>
+    <!-- tiny sparkle -->
+    <circle cx="740" cy="360" r="18" fill="#FFFFFF" fill-opacity="0.22"/>
+    <circle cx="760" cy="340" r="8" fill="#FFFFFF" fill-opacity="0.28"/>
+  </g>
+
+  <!-- Monogram: "N" ribbon -->
+  <path d="M338 706V318c0-34 41-51 66-27l250 250V318c0-18 14-32 32-32h44c18 0 32 14 32 32v388c0 34-41 51-66 27L446 483v223c0 18-14 32-32 32h-44c-18 0-32-14-32-32Z"
+        fill="#FFFFFF" fill-opacity="0.88"/>
+
+  <!-- Small cut to sharpen the ribbon junction -->
+  <path d="M486 474l-40 40v-80l40 40Z" fill="#3C46FF" fill-opacity="0.22"/>
+
+  <!-- Subtle inner shadow on monogram for depth -->
+  <g opacity="0.18" filter="url(#soft)">
+    <path d="M352 694V330c0-20 24-30 38-16l276 276V330c0-8 6-14 14-14h46c8 0 14 6 14 14v364c0 20-24 30-38 16L426 434v260c0 8-6 14-14 14h-46c-8 0-14-6-14-14Z"
+          fill="#0B0F2A"/>
+  </g>
+
+  <!-- " >_" motif: subtle, like a terminal wink -->
+  <g opacity="0.55">
+    <rect x="628" y="652" width="220" height="92" rx="28" fill="#FFFFFF" fill-opacity="0.06" stroke="#FFFFFF" stroke-opacity="0.10"/>
+    <text x="738" y="714" text-anchor="middle" font-size="56"
+          font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Cascadia Mono', monospace"
+          fill="#DFFBFF" fill-opacity="0.72">&gt;_</text>
+  </g>
+
+  <!-- Wordmark hint (optional, hidden by default) -->
+  <!--
+  <text x="512" y="900" text-anchor="middle" font-size="92" font-family="Segoe UI, Inter, Arial, sans-serif" font-weight="700" fill="#FFFFFF" fill-opacity="0.9">
+    OpenNCL
+  </text>
+  -->
+</svg>

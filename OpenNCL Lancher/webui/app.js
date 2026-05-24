@@ -4,7 +4,12 @@ const promptText = document.getElementById("prompt-text");
 const inputText = document.getElementById("input-text");
 const terminal = document.getElementById("terminal");
 
-const API = "http://127.0.0.1:7878/api";
+const API = (() => {
+    // If the WebUI is served by Flask (same origin), use relative API to avoid CORS.
+    if (location.protocol.startsWith("http") && location.port === "7878") return "/api";
+    // If opened from file:// or another origin, fall back to local Flask server.
+    return "http://127.0.0.1:7878/api";
+})();
 let history = [];
 let histIdx = -1;
 let inputBuf = "";
@@ -90,7 +95,7 @@ async function execCommand(cmd) {
         }
         fetchInfo();
     } catch (e) {
-        appendOutput("[ERROR] Cannot reach kernel.", "error");
+        appendOutput("[ERROR] Cannot reach backend server (127.0.0.1:7878). Start server/openncl_server.py", "error");
     }
 }
 

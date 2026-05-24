@@ -19,11 +19,15 @@ namespace OpenNCL_Lancher
     public sealed partial class MainWindow : Window
     {
         private readonly PythonLauncher _launcher = new();
+        private bool _nativeKernel;
+        private string? _nativeKernelErr;
+        private DebugWindow? _debugWindow;
         private readonly List<string> _history = new();
         private readonly Stopwatch _sw = new();
         private int _historyIndex = -1, _cmdCount;
         private readonly DispatcherQueue _dispatch;
         private string _inputBuf = "";
+        private bool _promptRendered;
         private string _mode = "normal";
         private string _promptStr = "openncl> ";
         private string _proPromptStr = "root@Command:~# ";
@@ -40,6 +44,19 @@ namespace OpenNCL_Lancher
         private SolidColorBrush _dim  = new(Windows.UI.Color.FromArgb(255, 100, 100, 110));
         private SolidColorBrush _accent = new(Windows.UI.Color.FromArgb(255, 0, 229, 160));
         private SolidColorBrush _path = new(Windows.UI.Color.FromArgb(255, 136, 136, 170));
+        private SolidColorBrush _ok   = new(Windows.UI.Color.FromArgb(255, 0, 229, 160));
+        private SolidColorBrush _warn = new(Windows.UI.Color.FromArgb(255, 255, 212, 59));
+
+        private static readonly string[] BootLogoLines =
+        {
+            "          ██████╗ ██████╗ ███████╗███╗   ██╗███╗   ██╗ ██████╗██╗",
+            "         ██╔═══██╗██╔══██╗██╔════╝████╗  ██║████╗  ██║██╔════╝██║",
+            "         ██║   ██║██████╔╝█████╗  ██╔██╗ ██║██╔██╗ ██║██║     ██║",
+            "         ██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║██║╚██╗██║██║     ██║",
+            "         ╚██████╔╝██║     ███████╗██║ ╚████║██║ ╚████║╚██████╗███████╗",
+            "          ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝╚═╝  ╚═══╝ ╚═════╝╚══════╝",
+            "                        Open New Command Line  v4.0",
+        };
 
         private static readonly Dictionary<string, Windows.UI.Color> ColorNames = new()
         {
@@ -71,7 +88,7 @@ namespace OpenNCL_Lancher
             "google","bing","youtube","open","ip","encrypt","decrypt","install",
             "cmd","powershell","explorer","notepad","control","taskmgr","mspaint","regedit",
             "mode pro","x++","linux","wsl","sandbox","logo","bridge start","edit","translate",
-            "calculator","screenshot","qrcode","kill","search","terminfo","diag"
+            "calculator","screenshot","qrcode","kill","search","terminfo","diag","debug","debug status","log"
         };
 
         public MainWindow()
@@ -79,6 +96,8 @@ namespace OpenNCL_Lancher
             InitializeComponent(); _dispatch = DispatcherQueue;
             _normalAccent = _accent.Color;
             LoadPrompts();
+            TryInitNativeKernel();
+            BackendDebugHub.Info("client", "MainWindow initialized");
             _launcher.OutputReceived += OnOutputReceived;
             _launcher.ProcessExited += () => _dispatch.TryEnqueue(() => { AppendError("Kernel stopped."); StatusText.Text = "Kernel offline"; });
             Closed += (_, _) => { _flowTimer?.Stop(); _launcher.Dispose(); };
@@ -88,6 +107,60 @@ namespace OpenNCL_Lancher
             Boot();
             RenderPrompt();
             RootGrid.Focus(FocusState.Programmatic);
+        }
+
+        private void TryInitNativeKernel()
+        {
+            try
+            {
+                // OpenNclNative.dll is optional; when present it replaces stdin/stdout forwarding.
+                EnsurePythonHomeForNative();
+                _nativeKernel = Runtime.OpenNclNative.openncl_init(AppContext.BaseDirectory) != 0;
+                if (!_nativeKernel)
+                    _nativeKernelErr = Runtime.OpenNclNative.LastError();
+                BackendDebugHub.Info("native", _nativeKernel ? "OpenNclNative.dll loaded" : "OpenNclNative.dll not loaded: " + (_nativeKernelErr ?? "unknown"));
+            }
+            catch (DllNotFoundException)
+            {
+                _nativeKernel = false;
+                _nativeKernelErr = "OpenNclNative.dll not found";
+                BackendDebugHub.Warn("native", _nativeKernelErr);
+            }
+            catch (BadImageFormatException)
+            {
+                _nativeKernel = false;
+                _nativeKernelErr = "OpenNclNative.dll arch mismatch (x64/x86)";
+                BackendDebugHub.Error("native", _nativeKernelErr);
+            }
+            catch (Exception ex)
+            {
+                _nativeKernel = false;
+                _nativeKernelErr = ex.Message;
+                BackendDebugHub.Error("native", "init exception: " + ex.Message);
+            }
+        }
+
+        private static void EnsurePythonHomeForNative()
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OPENNCL_PYTHONHOME")))
+                    return;
+
+                var path = Environment.GetEnvironmentVariable("PATH") ?? "";
+                foreach (var dirRaw in path.Split(';', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var dir = dirRaw.Trim().Trim('"');
+                    if (dir.Length == 0) continue;
+                    var candidate = Path.Combine(dir, "python.exe");
+                    if (File.Exists(candidate))
+                    {
+                        Environment.SetEnvironmentVariable("OPENNCL_PYTHONHOME", dir);
+                        return;
+                    }
+                }
+            }
+            catch { }
         }
 
         private void Window_Activated(object _, WindowActivatedEventArgs __) { RootGrid.Focus(FocusState.Programmatic); }
@@ -223,6 +296,7 @@ namespace OpenNCL_Lancher
 
         private void RootGrid_CharReceived(UIElement sender, CharacterReceivedRoutedEventArgs args)
         {
+            if (args.Character < 0x20) return; // ignore control chars
             _inputBuf += args.Character;
             RefreshPrompt(_inputBuf);
         }
@@ -238,24 +312,21 @@ namespace OpenNCL_Lancher
         private void RefreshPrompt(string input)
         {
             var blocks = TerminalOutput.Blocks;
-            // Remove last 2 blocks: spacer + prompt
-            if (blocks.Count >= 2 && blocks[^1] is Paragraph)
-            {
+            if (_promptRendered && blocks.Count > 0)
                 blocks.RemoveAt(blocks.Count - 1);
-                if (blocks.Count > 0 && blocks[^1] is Paragraph p && p.Inlines.Count > 0 && p.Inlines[0] is Run r && r.Foreground == _path)
-                    blocks.RemoveAt(blocks.Count - 1);
-            }
 
-            blocks.Add(MakePara(PathText(), _path));
-            blocks.Add(MakePara(Prompt() + input, _fg));
+            blocks.Add(MakePara(PathText() + Prompt() + input, _fg));
+            _promptRendered = true;
             ScrollDown();
         }
 
         private void FlushPrompt(string cmd)
         {
             var blocks = TerminalOutput.Blocks;
-            if (blocks.Count >= 2) { blocks.RemoveAt(blocks.Count - 1); blocks.RemoveAt(blocks.Count - 1); }
+            if (_promptRendered && blocks.Count > 0)
+                blocks.RemoveAt(blocks.Count - 1);
             blocks.Add(MakePara(PathText() + Prompt() + cmd, _fg));
+            _promptRendered = false;
         }
 
         private static Paragraph MakePara(string text, SolidColorBrush color)
@@ -274,24 +345,75 @@ namespace OpenNCL_Lancher
         }
 
         // ==================== OUTPUT ====================
-        private void Boot()
+        private async void Boot()
         {
-            Out("          ██████╗ ██████╗ ███████╗███╗   ██╗███╗   ██╗ ██████╗██╗", _fg);
-            Out("         ██╔═══██╗██╔══██╗██╔════╝████╗  ██║████╗  ██║██╔════╝██║", _fg);
-            Out("         ██║   ██║██████╔╝█████╗  ██╔██╗ ██║██╔██╗ ██║██║     ██║", _fg);
-            Out("         ██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║██║╚██╗██║██║     ██║", _fg);
-            Out("         ╚██████╔╝██║     ███████╗██║ ╚████║██║ ╚████║╚██████╗███████╗", _fg);
-            Out("          ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝╚═╝  ╚═══╝ ╚═════╝╚══════╝", _fg);
-            Out("  │  Kernel v4.0  [Online]", _fg);
-            Out("  │  Type \"help\" for commands.", _dim);
-            Out("                        Open New Command Line  v4.0", _accent);
-            Out("", _dim);
+            // -------- Boot self-check page (standalone) --------
+            TerminalOutput.Blocks.Clear();
+            _promptRendered = false;
+            _inputBuf = "";
+
             FillViewport();
-            _ = StartKernelAsync();
+            OutStatus(true, "UI init");
+            OutStatus(true, "Input hook");
+            OutStatus(_nativeKernel, "Native bridge", _nativeKernel ? "OpenNclNative.dll" : (_nativeKernelErr ?? "not loaded"));
+
+            var es = FindEs();
+            OutStatus(es != null, "Everything", es != null ? "es.exe found" : "es.exe not found");
+
+            var cfg = CfgPath();
+            OutStatus(File.Exists(cfg), "Config", File.Exists(cfg) ? "brand.json OK" : "brand.json missing");
+
+            // Keep this page visible for 1 second.
+            await Task.Delay(1000);
+
+            // -------- Normal terminal (logo + prompt) --------
+            TerminalOutput.Blocks.Clear();
+            _promptRendered = false;
+            _cmdCount = 0;
+            CmdCountText.Text = "0 commands";
+
+            PrintBootLogo();
+            Out("  │  Kernel v4.0", _fg);
+            Out("  │  Type \"help\" for commands.", _dim);
+            Out("", _dim);
+
+            await StartKernelAsync();
+
+            // Reduce logo-to-prompt gap: do not pad the viewport here.
+            RenderPrompt();
+        }
+
+        private void PrintBootLogo()
+        {
+            for (int i = 0; i < BootLogoLines.Length; i++)
+                Out(BootLogoLines[i], i == BootLogoLines.Length - 1 ? _accent : _fg);
+        }
+
+        private void OutStatus(bool ok, string name, string? details = null)
+        {
+            var p = new Paragraph { Margin = new(0) };
+            p.Inlines.Add(new Run { Text = ok ? "[OK] " : "[FAIL] ", Foreground = ok ? _ok : _err });
+            p.Inlines.Add(new Run { Text = details == null ? name : $"{name} - {details}", Foreground = ok ? _fg : _warn });
+            TerminalOutput.Blocks.Add(p);
+            ScrollDown();
         }
 
         private async Task StartKernelAsync()
         {
+            if (_nativeKernel)
+            {
+                _dispatch.TryEnqueue(() =>
+                {
+                    Out("  |  [OK] Native kernel bridge loaded (OpenNclNative.dll).", _fg);
+                    StatusText.Text = "Online";
+                    // Keep prompt at the bottom after async status line.
+                    RenderPrompt();
+                });
+                BackendDebugHub.Info("kernel", "using native bridge");
+                return;
+            }
+
+            BackendDebugHub.Info("kernel", "starting python process bridge");
             var online = await _launcher.StartAsync();
             _dispatch.TryEnqueue(() =>
             {
@@ -299,13 +421,18 @@ namespace OpenNCL_Lancher
                 {
                     Out("  |  [OK] Python kernel connected (handshake OK).", _fg);
                     StatusText.Text = "Online";
+                    BackendDebugHub.Info("kernel", "python handshake OK");
                 }
                 else
                 {
                     var err = _launcher.LastError ?? "python not found or script missing";
-                    Out("  |  [WARN] Python kernel offline: " + err, _err);
+                    Out("  |  Python kernel unavailable: " + err, _dim);
                     StatusText.Text = "Kernel offline";
+                    BackendDebugHub.Warn("kernel", "python offline: " + err);
                 }
+
+                // Ensure prompt remains visible after status output.
+                RenderPrompt();
             });
         }
 
@@ -332,6 +459,7 @@ namespace OpenNCL_Lancher
 
         private void OnOutputReceived(string text)
         {
+            BackendDebugHub.Trace("python<-", text.Replace("\r", "\\r").Replace("\n", "\\n"));
             _dispatch.TryEnqueue(() =>
             {
                 foreach (var l in text.Split('\n'))
@@ -345,6 +473,7 @@ namespace OpenNCL_Lancher
         // ==================== EXECUTE ====================
         private void Execute(string cmd)
         {
+            BackendDebugHub.Info("cmd", cmd);
             _sw.Restart(); var r = Exec(cmd); _sw.Stop();
             var ms = _sw.Elapsed.TotalMilliseconds;
             var perf = ms < 0.5 ? "" : $" [{ms:F1}ms]";
@@ -360,8 +489,26 @@ namespace OpenNCL_Lancher
 
         private void TryForward(string cmd)
         {
-            if (_launcher.KernelReady) { _launcher.SendCommand(cmd); return; }
-            Out("  [WARN] Python kernel offline — cannot forward: " + cmd, _dim);
+            if (_nativeKernel)
+            {
+                BackendDebugHub.Info("native->", cmd);
+                var outText = Runtime.OpenNclNative.Exec(cmd);
+                if (outText == null)
+                {
+                    BackendDebugHub.Error("native<-", Runtime.OpenNclNative.LastError() ?? "unknown");
+                    Out("  [ERROR] Native bridge failed: " + (Runtime.OpenNclNative.LastError() ?? "unknown"), _err);
+                    return;
+                }
+                BackendDebugHub.Trace("native<-", outText.Replace("\r", "\\r").Replace("\n", "\\n"));
+                foreach (var l in outText.Split('\n'))
+                    if (!string.IsNullOrEmpty(l))
+                        Out(l, l.StartsWith("[ERROR]") ? _err : _fg);
+                return;
+            }
+
+            if (_launcher.KernelReady) { BackendDebugHub.Info("python->", cmd); _launcher.SendCommand(cmd); return; }
+            Out("  Python kernel offline — cannot forward: " + cmd, _dim);
+            BackendDebugHub.Warn("python", "cannot forward (offline): " + cmd);
         }
 
         private void HandleExit()
@@ -376,6 +523,9 @@ namespace OpenNCL_Lancher
             var c = cmd.ToLower().Trim();
             if (c == "help") return Help();
             if (c == "about") return About();
+            if (c == "debug") { OpenDebugWindow(); return "Opened backend debug window."; }
+            if (c == "debug status") return DebugStatus();
+            if (c == "log") return "Use \"debug\" to view backend comms. (Tip: \"debug status\")";
             if (c == "version" || c == "ver") return "OpenNCL Kernel v4.0";
             if (c == "date" || c == "time") return DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
             if (c == "pwd") return Environment.CurrentDirectory;
@@ -407,6 +557,7 @@ namespace OpenNCL_Lancher
             if (IsSys(c)) { LaunchSys(c); return "__OK__"; }
             if (c == "mode pro") { _mode = "pro"; _accent = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 165, 0)); ModeIndicator.Text = "pro"; ModeIndicator.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 169, 77)); return "Entering Professional Mode.\nType \"exit\" to return."; }
             if (c == "x++") return "__FORWARD__";
+            if (c == "logo") return string.Join("\n", BootLogoLines);
             if (c.StartsWith("logo ")) return "__FORWARD__";
             if (c.StartsWith("sandbox ")) return "__FORWARD__";
             if (c == "bridge start") return "__FORWARD__";
@@ -424,11 +575,95 @@ namespace OpenNCL_Lancher
             return null;
         }
 
-        static string Help() => "==================================================\n  OpenNCL v4.0  |  Command Reference\n==================================================\n  help/about  version/ver  date/time  dir/ls  pwd  cd <p>\n  sysinfo  ip  modules  clear/cls  exit/quit\n  calc <e>  echo <t>  encrypt/decrypt <t>\n  color(fg,bg)  terminfo  diag\n  google/bing/youtube <q>  open <url>\n  search <name>  kill <proc>  cmd/powershell/explorer...\n  mode pro  X++  logo  sandbox  bridge  edit  linux\n  config about <k> <v>  edit about  config about show\n==================================================";
+        static string Help() => string.Join("\n",
+            "==================================================",
+            "  OpenNCL v4.0  |  Help",
+            "==================================================",
+            "",
+            "  Basics",
+            "  - help                 Show this help",
+            "  - about                About (editable)",
+            "  - version | ver        Version",
+            "  - date | time          Current date/time",
+            "  - dir | ls             List files",
+            "  - pwd                  Print working directory",
+            "  - cd <path>            Change directory",
+            "  - clear | cls          Clear screen",
+            "  - exit | quit          Exit / leave pro mode",
+            "",
+            "  Tools",
+            "  - calc <expr>          Calculate",
+            "  - echo <text>          Echo",
+            "  - encrypt <text>       Base64 encode",
+            "  - decrypt <text>       Base64 decode",
+            "  - color(fg,bg)         Change theme colors",
+            "",
+            "  Web",
+            "  - google <q>           Search Google",
+            "  - bing <q>             Search Bing",
+            "  - youtube <q>          Search YouTube",
+            "  - open <url|path>      Open URL/file/folder",
+            "",
+            "  System",
+            "  - sysinfo | system     System information",
+            "  - ip                   Public IP",
+            "  - cmd | powershell     Launch shell",
+            "  - explorer | notepad   Open system apps",
+            "  - control | taskmgr    System tools",
+            "  - mspaint | regedit    System tools",
+            "",
+            "  Search (Everything)",
+            "  - search <name>        File search via es.exe",
+            "",
+            "  Advanced (needs backend)",
+            "  - mode pro             Pro prompt",
+            "  - x++                  Forward to kernel",
+            "  - logo <...>           Forward to kernel",
+            "  - sandbox <...>        Forward to kernel",
+            "  - bridge start         Forward to kernel",
+            "  - edit <file>          Forward to kernel",
+            "  - translate <...>      Forward to kernel",
+            "  - qrcode               Forward to kernel",
+            "  - linux | wsl          WSL status",
+            "",
+            "  Debug",
+            "  - terminfo             Terminal info",
+            "  - diag                 Diagnostics (bridge status)",
+            "  - debug                Open backend debug window",
+            "  - debug status         Print current status line",
+            "",
+            "  About editing",
+            "  - edit about           Open config file",
+            "  - config about show    Show current about config",
+            "  - config about <k> <v> Set about field (title/author/platform/kernel/footer/github)",
+            "=================================================="
+        );
         static string About() { var c = LoadCfg(); return $"{c.title}\n==========================================\nAuthor   : {c.author}\nPlatform : {c.platform}\nKernel   : {c.kernel}\n==========================================\n  {c.footer}\n  {c.github}"; }
 
         static string DirText() { try { var l = new List<string> { Environment.CurrentDirectory }; foreach (var d in Directory.GetDirectories(Environment.CurrentDirectory)) l.Add("  [DIR]  " + Path.GetFileName(d)); foreach (var f in Directory.GetFiles(Environment.CurrentDirectory)) { var fi = new FileInfo(f); l.Add($"  {fi.Length,8:N0}  {fi.Name}"); } return string.Join("\n", l); } catch (Exception e) { return "[ERROR] " + e.Message; } }
-        string? ChangeDir(string cmd) { var p = cmd[3..].Trim().Trim('"'); if (string.IsNullOrEmpty(p)) return Environment.CurrentDirectory; try { Environment.CurrentDirectory = Path.GetFullPath(p); if (_launcher.KernelReady) _launcher.SendCommand("cd " + Environment.CurrentDirectory); return Environment.CurrentDirectory; } catch (Exception e) { return "[ERROR] " + e.Message; } }
+        string? ChangeDir(string cmd)
+        {
+            var p = cmd[3..].Trim().Trim('"');
+            if (string.IsNullOrEmpty(p)) return Environment.CurrentDirectory;
+            try
+            {
+                Environment.CurrentDirectory = Path.GetFullPath(p);
+                if (_nativeKernel)
+                {
+                    // Keep python-side cwd in sync when using the native embedded kernel.
+                    Runtime.OpenNclNative.Exec("cd " + Environment.CurrentDirectory);
+                }
+                else if (_launcher.KernelReady)
+                {
+                    _launcher.SendCommand("cd " + Environment.CurrentDirectory);
+                }
+                return Environment.CurrentDirectory;
+            }
+            catch (Exception e)
+            {
+                return "[ERROR] " + e.Message;
+            }
+        }
         static string Sys() => $"OS       : {Environment.OSVersion}\nMachine  : {Environment.MachineName}\nUser     : {Environment.UserName}\nCPU      : {Environment.ProcessorCount} cores ({(Environment.Is64BitOperatingSystem ? "x64" : "x86")})\nCLR      : {Environment.Version}\nDir      : {Environment.CurrentDirectory}";
         static string GetIp() { try { using var h = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(3) }; return "Public IP: " + h.GetStringAsync("https://api.ipify.org").Result.Trim(); } catch { return "[ERROR] Cannot reach api.ipify.org."; } }
         static string Calc(string raw) { var e = Regex.Replace(raw, @"^(calc|calculate)\s+", "", RegexOptions.IgnoreCase).Replace("\u00d7", "*").Replace("\u00f7", "/").Replace("^", "**"); try { return e + " = " + new System.Data.DataTable().Compute(e, null); } catch (Exception ex) { return "[ERROR] " + ex.Message; } }
@@ -486,6 +721,8 @@ namespace OpenNCL_Lancher
                 "  ===========",
                 "",
                 "  C# Engine   : OK (43 built-in commands)",
+                $"  Native DLL  : {(_nativeKernel ? "Loaded (OpenNclNative.dll)" : "Not loaded")}",
+                $"  Native Err  : {_nativeKernelErr ?? "none"}",
                 $"  Python      : {(_launcher.KernelReady ? "Connected (handshake OK)" : _launcher.IsRunning ? "Process running, handshake pending..." : "Not running")}",
                 $"  Last Error  : {_launcher.LastError ?? "none"}",
                 $"  Process     : {(_launcher.IsRunning ? "alive" : "dead")}",
@@ -505,6 +742,24 @@ namespace OpenNCL_Lancher
         {
             var c = LoadCfg();
             return $"  Terminal Info\n  ---------------\n  Mode     : {_mode}\n  Prompt   : {Prompt().Trim()}\n  ProPrompt: {_proPromptStr.Trim()}\n  CWD      : {Environment.CurrentDirectory}\n  History  : {_history.Count} entries\n  Kernel   : {(_launcher.KernelReady ? "online" : "offline")}\n  Brand    : {c.title}\n  Commands : {_cmdCount} executed";
+        }
+
+        private void OpenDebugWindow()
+        {
+            if (_debugWindow != null) return;
+            var status = DebugStatus();
+            _debugWindow = new DebugWindow(status);
+            _debugWindow.Closed += (_, _) => _debugWindow = null;
+            _debugWindow.Activate();
+            BackendDebugHub.Info("debug", "debug window opened");
+        }
+
+        private string DebugStatus()
+        {
+            var bridge = _nativeKernel ? "native(OpenNclNative.dll)" : "python(process)";
+            var native = _nativeKernel ? "Loaded" : $"Not loaded ({_nativeKernelErr ?? "unknown"})";
+            var py = _launcher.KernelReady ? "handshake OK" : _launcher.IsRunning ? "running (handshake pending)" : "not running";
+            return $"Bridge={bridge} | Native={native} | Python={py} | LastError={_launcher.LastError ?? "none"}";
         }
 
         private string SetPrompt(string value, bool isPro)
