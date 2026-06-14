@@ -1,0 +1,86 @@
+OpenNCL v4.0 Release Notes
+June 2026 – A major step forward for the OpenNCL terminal environment.
+
+OpenNCL v4.0 brings a more powerful, extensible, and polished terminal experience. Whether you use the desktop app or the standalone HTML terminal, you'll find new tools to speed up your workflow and a fresh, modern interface.
+
+What's New
+Plugin System – Add Commands Without Recompiling
+Drop a Python script into the plugins/ folder and it becomes a new command instantly. No C# recompilation, no restart of the whole application – just write a function and start using it. An example hello plugin is included.
+
+Command Palette (Ctrl+Shift+P)
+Inspired by VS Code, the new command palette lists ~50 built‑in actions. Type to filter, select with arrow keys, and press Enter to insert the command into your terminal line – you can still add arguments before running it.
+
+AI Sidebar (Tab Key)
+A dedicated chat panel powered by WebView2. Ask questions, get code suggestions, or discuss problems with an AI assistant while keeping your terminal session in focus. The sidebar can be toggled on/off with the Tab key, and your API configuration is saved between sessions.
+
+Smoother Animations & Better Performance
+The rainbow background orbs now use zero memory allocations per frame – no more stutter or garbage collection pauses. The terminal input also handles Ctrl+V correctly, so pasting from the clipboard finally works as expected.
+
+Build & Stability Improvements
+Resolved several build warnings (NETSDK1198, PRI249) – cleaner compilation logs.
+
+Improved error messages when the Python kernel is offline.
+
+Fixed a double‑execution bug that could run forwarded commands twice.
+
+Core Terminal Enhancements
+Customizable Prompts
+Use config prompt <text> and config pro_prompt <text> to set your own prompt strings. They are saved to brand.json and restored on startup.
+
+Mode Pro – Visual Boost
+Enter mode pro to switch to an orange accent theme that makes the prompt stand out. Your custom "pro" prompt will be used automatically.
+
+Terminfo Command
+Type terminfo to see terminal status: mode, prompt, current working directory, kernel state, number of available commands, and more.
+
+Real Color Themes
+The color(fg,bg) command now genuinely changes the terminal's foreground and background colors at runtime – no restart needed.
+
+Standalone HTML Terminal
+The webui/standalone.html file now includes all the new commands (terminfo, config prompt, qrcode, translate, pwd) plus theme switching and a polished top/bottom bar.
+
+Full Command List (50+)
+Category	Commands
+Basic	help, about, date, time, version, ver, dir, ls, sysinfo, system, modules, clear, cls, exit, quit, cd, pwd, ip, terminfo
+Tools	calc, calculate, echo, encrypt, decrypt, color(), install, search, kill
+Web	google, bing, youtube, open, URLs auto‑detected and opened
+System	cmd, powershell, explorer, notepad, control, taskmgr, mspaint, regedit, python, node
+Advanced	mode pro, x++, logo, sandbox, bridge, edit, translate, linux, wsl
+GUI	calculator, screenshot, qrcode
+Config	config about, edit about, config prompt, config pro_prompt
+Commands marked as "advanced" are forwarded to the Python kernel; everything else runs natively in C# for speed.
+
+Notable Fixes
+Paste (Ctrl+V) now works in the main terminal area (previously it only worked in the AI sidebar and command palette search box).
+
+Command forwarding no longer sends a command twice when both C# and Python can handle it.
+
+Startup handshake between C# and the Python kernel is now reliable (5‑second timeout with a __READY__ signal).
+
+Path resolution for python/launcher.py works even when building to deep output folders like bin/Debug/net8.0-windows/win-x64/.
+
+How to Get Started
+Desktop (WinUI 3)
+
+Build: dotnet build -c Release -r win-x64
+
+Run: dotnet run -c Release -r win-x64
+
+Requires: .NET 8, Windows App SDK 1.8+, Python 3.x on PATH
+
+Standalone HTML Terminal
+
+Open webui/standalone.html in any modern browser – no backend needed for 30+ commands.
+
+WebUI Mode (Flask)
+
+cd python && python ..\server\openncl_server.py
+
+Visit http://127.0.0.1:7878
+
+Feedback & Contributions
+OpenNCL v4.0 is the result of five focused development sessions. We welcome bug reports, plugin ideas, and pull requests. The new plugin system makes it easier than ever to extend the terminal – share your own plugins with the community.
+
+Enjoy the new terminal experience.
+– The OpenNCL
+

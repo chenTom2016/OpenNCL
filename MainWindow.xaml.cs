@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -31,6 +33,10 @@ namespace OpenNCL_Lancher
         private string _mode = "normal";
         private string _promptStr = "openncl> ";
         private string _proPromptStr = "root@Command:~# ";
+        private string _aiProvider = "openai";
+        private string _aiModel = "gpt-4o";
+        private string _aiApiUrl = "https://api.openai.com/v1/chat/completions";
+        private string _aiApiKey = "";
         private Windows.UI.Color _normalAccent;
         private DispatcherTimer? _flowTimer;
         private readonly Random _rng = new();
@@ -38,6 +44,7 @@ namespace OpenNCL_Lancher
         private readonly (double x, double y, double size, Windows.UI.Color color)[] _orbTargets = new (double, double, double, Windows.UI.Color)[4];
         private readonly (double x, double y, double size)[] _orbState = new (double, double, double)[4];
         private readonly double[] _orbSpeed = new double[4];
+        private readonly RadialGradientBrush[] _orbBrushes = new RadialGradientBrush[4];
 
         private SolidColorBrush _fg   = new(Windows.UI.Color.FromArgb(255, 220, 220, 220));
         private SolidColorBrush _err  = new(Windows.UI.Color.FromArgb(255, 255, 70, 70));
@@ -88,19 +95,84 @@ namespace OpenNCL_Lancher
             "google","bing","youtube","open","ip","encrypt","decrypt","install",
             "cmd","powershell","explorer","notepad","control","taskmgr","mspaint","regedit",
             "mode pro","x++","linux","wsl","sandbox","logo","bridge start","edit","translate",
-            "calculator","screenshot","qrcode","kill","search","terminfo","diag","debug","debug status","log"
+            "calculator","screenshot","qrcode","kill","search","terminfo","diag","debug","debug status","log",
+            "ai","ask","config ai","config ai model","config ai api","config ai key","config ai provider","config ai show"
         };
+
+        // Command palette catalog: name + short description (Ctrl+Shift+P)
+        private static readonly (string Name, string Desc)[] CommandCatalog =
+        {
+            ("help", "Show help"),
+            ("about", "About OpenNCL"),
+            ("version", "Kernel version"),
+            ("date", "Current date/time"),
+            ("dir", "List current directory"),
+            ("pwd", "Print working directory"),
+            ("cd ", "Change directory"),
+            ("sysinfo", "System information"),
+            ("ip", "Show IP address"),
+            ("modules", "List loaded modules"),
+            ("plugins", "List loaded plugins"),
+            ("terminfo", "Terminal status"),
+            ("diag", "Diagnostics"),
+            ("clear", "Clear the terminal"),
+            ("exit", "Exit / quit"),
+            ("echo ", "Echo text"),
+            ("calc ", "Calculator"),
+            ("encrypt ", "Encrypt text"),
+            ("decrypt ", "Decrypt text"),
+            ("search ", "Everything file search"),
+            ("kill ", "Kill a process"),
+            ("install ", "Install a package"),
+            ("google ", "Search Google"),
+            ("bing ", "Search Bing"),
+            ("youtube ", "Search YouTube"),
+            ("open ", "Open URL"),
+            ("color(fg,bg)", "Change terminal theme"),
+            ("mode pro", "Enter professional mode"),
+            ("x++", "x++ command"),
+            ("logo", "Show ASCII logo"),
+            ("sandbox ", "Sandbox command"),
+            ("bridge start", "Start bridge"),
+            ("edit ", "Edit a file"),
+            ("translate ", "Translate text"),
+            ("qrcode", "Generate QR code"),
+            ("screenshot", "Take a screenshot"),
+            ("calculator", "Open calculator"),
+            ("linux", "WSL / Linux status"),
+            ("cmd", "Open cmd"),
+            ("powershell", "Open PowerShell"),
+            ("explorer", "Open Explorer"),
+            ("notepad", "Open Notepad"),
+            ("taskmgr", "Open Task Manager"),
+            ("regedit", "Open Registry Editor"),
+            ("debug", "Open backend debug window"),
+            ("ai", "Open AI sidebar"),
+            ("ask ", "Ask the AI"),
+            ("config ai show", "Show AI config"),
+            ("config ai key ", "Set AI API key"),
+            ("config ai model ", "Set AI model"),
+            ("config prompt ", "Set custom prompt"),
+            ("config about ", "Edit brand info"),
+        };
+
+        private List<(string Name, string Desc)> _paletteFiltered = new();
 
         public MainWindow()
         {
             InitializeComponent(); _dispatch = DispatcherQueue;
             _normalAccent = _accent.Color;
             LoadPrompts();
+            LoadAiConfig();
             TryInitNativeKernel();
             BackendDebugHub.Info("client", "MainWindow initialized");
             _launcher.OutputReceived += OnOutputReceived;
             _launcher.ProcessExited += () => _dispatch.TryEnqueue(() => { AppendError("Kernel stopped."); StatusText.Text = "Kernel offline"; });
             Closed += (_, _) => { _flowTimer?.Stop(); _launcher.Dispose(); };
+            AiPanel.CloseRequested += () => ToggleSidebar(false);
+            AiPanel.ToolCallRequested += HandleToolCallAsync;
+            AiPanel.RunInTerminalRequested += code => _dispatch.TryEnqueue(() => { _inputBuf = code; RefreshPrompt(_inputBuf); });
+            AiPanel.TerminalContextRequested += GetContextJson;
             try { AppWindow.Resize(new Windows.Graphics.SizeInt32(1050, 680)); } catch { }
 
             InitRainbow();
@@ -179,6 +251,11 @@ namespace OpenNCL_Lancher
             for (int i = 0; i < 4; i++)
             {
                 var orb = new Microsoft.UI.Xaml.Shapes.Ellipse();
+                var brush = new RadialGradientBrush();
+                brush.GradientStops.Add(new GradientStop { Color = Windows.UI.Color.FromArgb(255, 0, 0, 0), Offset = 0.0 });
+                brush.GradientStops.Add(new GradientStop { Color = Windows.UI.Color.FromArgb(0, 0, 0, 0), Offset = 1.0 });
+                orb.Fill = brush;
+                _orbBrushes[i] = brush;
                 GradientCanvas.Children.Add(orb);
                 _orbs.Add(orb);
             }
@@ -236,15 +313,28 @@ namespace OpenNCL_Lancher
             Canvas.SetLeft(orb, s.x);
             Canvas.SetTop(orb, s.y);
             var c = _orbTargets[i].color;
-            var brush = new RadialGradientBrush();
-            brush.GradientStops.Add(new GradientStop { Color = c, Offset = 0.0 });
-            brush.GradientStops.Add(new GradientStop { Color = Windows.UI.Color.FromArgb(0, c.R, c.G, c.B), Offset = 1.0 });
-            orb.Fill = brush;
+            var stops = _orbBrushes[i].GradientStops;
+            stops[0].Color = c;
+            stops[1].Color = Windows.UI.Color.FromArgb(0, c.R, c.G, c.B);
         }
 
         // ==================== INPUT ====================
         private void RootGrid_KeyDown(object sender, KeyRoutedEventArgs e)
         {
+            // Ctrl+Shift+P -> command palette
+            if (e.Key == Windows.System.VirtualKey.P && IsCtrlDown() && IsShiftDown())
+            {
+                OpenCommandPalette();
+                e.Handled = true;
+                return;
+            }
+            // Ctrl+V -> paste from clipboard
+            if (e.Key == Windows.System.VirtualKey.V && IsCtrlDown())
+            {
+                _ = PasteFromClipboard();
+                e.Handled = true;
+                return;
+            }
             if (e.Key == Windows.System.VirtualKey.Enter)
             {
                 var cmd = _inputBuf.Trim();
@@ -288,8 +378,7 @@ namespace OpenNCL_Lancher
             }
             else if (e.Key == Windows.System.VirtualKey.Tab)
             {
-                _inputBuf += "    ";
-                RefreshPrompt(_inputBuf);
+                ToggleSidebar();
                 e.Handled = true;
             }
         }
@@ -299,6 +388,22 @@ namespace OpenNCL_Lancher
             if (args.Character < 0x20) return; // ignore control chars
             _inputBuf += args.Character;
             RefreshPrompt(_inputBuf);
+        }
+
+        private async Task PasteFromClipboard()
+        {
+            try
+            {
+                var content = Windows.ApplicationModel.DataTransfer.Clipboard.GetContent();
+                if (!content.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.Text)) return;
+                var text = await content.GetTextAsync();
+                if (string.IsNullOrEmpty(text)) return;
+                // Terminal input is single-line: collapse newlines/tabs into spaces
+                text = text.Replace("\r\n", " ").Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' ');
+                _inputBuf += text;
+                RefreshPrompt(_inputBuf);
+            }
+            catch { }
         }
 
         // ==================== PROMPT RENDER ====================
@@ -479,6 +584,7 @@ namespace OpenNCL_Lancher
             var perf = ms < 0.5 ? "" : $" [{ms:F1}ms]";
 
             if (r == null) { var hint = Suggest(cmd); if (hint != null) Out("  Did you mean \"" + hint + "\"?", _dim); TryForward(cmd); return; }
+            if (r == "__SIDEBAR__") return;
             if (r == "__FORWARD__") { TryForward(cmd); return; }
             if (r == "__OK__") { if (perf.Length > 0) Out("  OK" + perf, _dim); return; }
             if (r == "__CLEAR__") { TerminalOutput.Blocks.Clear(); _cmdCount = 0; CmdCountText.Text = "0 commands"; FillViewport(); RenderPrompt(); return; }
@@ -521,6 +627,17 @@ namespace OpenNCL_Lancher
         private string? Exec(string cmd)
         {
             var c = cmd.ToLower().Trim();
+            // === Inline AI: # <natural language> ===
+            if (c.StartsWith("#"))
+            {
+                var prompt = cmd[1..].Trim();
+                if (string.IsNullOrWhiteSpace(prompt)) return "# Usage: # <natural language description of what you want to do>";
+                if (string.IsNullOrWhiteSpace(_aiApiKey))
+                    return "[ERROR] AI API key not set. Use: config ai key <key>";
+                _ = GenerateCommandAsync(prompt);
+                return "__OK__";
+            }
+            // ====================================
             if (c == "help") return Help();
             if (c == "about") return About();
             if (c == "debug") { OpenDebugWindow(); return "Opened backend debug window."; }
@@ -532,7 +649,8 @@ namespace OpenNCL_Lancher
             if (c == "dir" || c == "ls") return DirText();
             if (c == "sysinfo" || c == "system") return Sys();
             if (c == "ip") return GetIp();
-            if (c == "modules") return "math net fs encrypt qrcode translate bridge";
+            if (c == "modules") return "math net fs encrypt qrcode translate bridge ai";
+            if (c == "plugins") return "__FORWARD__";
             if (c == "clear" || c == "cls") return "__CLEAR__";
             if (c == "exit" || c == "quit") return "__EXIT__";
             if (c.StartsWith("cd ")) return ChangeDir(cmd);
@@ -566,6 +684,14 @@ namespace OpenNCL_Lancher
             if (c.StartsWith("config about ")) return EditAboutCfg(cmd[13..].Trim());
             if (c.StartsWith("config prompt ")) return SetPrompt(cmd[14..].Trim(), false);
             if (c.StartsWith("config pro_prompt ")) return SetPrompt(cmd[18..].Trim(), true);
+            if (c.StartsWith("config ai show")) return ShowAiConfig();
+            if (c.StartsWith("config ai model ")) return SetAiConfig("model", cmd[17..].Trim());
+            if (c.StartsWith("config ai api ")) return SetAiConfig("api", cmd[14..].Trim());
+            if (c.StartsWith("config ai key ")) return SetAiConfig("key", cmd[15..].Trim());
+            if (c.StartsWith("config ai provider ")) return SetAiConfig("provider", cmd[20..].Trim());
+            if (c == "ai" || c == "ask") { ToggleSidebar(true); return "__SIDEBAR__"; }
+            if (c.StartsWith("ai ")) return ExecAi(cmd[3..].Trim());
+            if (c.StartsWith("ask ")) return ExecAi(cmd[4..].Trim());
             if (c.StartsWith("edit ")) return "__FORWARD__";
             if (c.StartsWith("translate ")) return "__FORWARD__";
             if (c is "linux" or "wsl") return WslStatus();
@@ -632,6 +758,15 @@ namespace OpenNCL_Lancher
             "  - debug                Open backend debug window",
             "  - debug status         Print current status line",
             "",
+            "  AI (OpenAI-compatible API)",
+            "  - ai <prompt>          Ask AI (GPT-4, Claude, etc.)",
+            "  - ask <prompt>         Same as ai",
+            "  - config ai show       Show AI configuration",
+            "  - config ai model <m>  Set AI model",
+            "  - config ai api <url>  Set API endpoint",
+            "  - config ai key <k>    Set API key",
+            "  - config ai provider <p> Set provider name",
+            "",
             "  About editing",
             "  - edit about           Open config file",
             "  - config about show    Show current about config",
@@ -682,7 +817,7 @@ namespace OpenNCL_Lancher
         static string EditAboutCfg(string args) { if (string.IsNullOrEmpty(args)) return "Usage: config about <key> <value>"; var p = args.Split(' ', 2); if (p.Length < 2) return "[ERROR] Usage: config about <key> <value>"; var c = LoadCfg(); switch (p[0].ToLower()) { case "title": c.title = p[1]; break; case "author": c.author = p[1]; break; case "platform": c.platform = p[1]; break; case "kernel": c.kernel = p[1]; break; case "footer": c.footer = p[1]; break; case "github": c.github = p[1]; break; default: return "[ERROR] Unknown key: " + p[0]; } SaveCfg(c); return "Updated " + p[0] + " -> " + p[1]; }
         static string CfgPath() => Path.Combine(AppContext.BaseDirectory, "config", "brand.json");
         static (string title, string author, string platform, string kernel, string footer, string github) LoadCfg() { try { if (File.Exists(CfgPath())) { using var d = JsonDocument.Parse(File.ReadAllText(CfgPath())); var r = d.RootElement.TryGetProperty("about", out var ab) ? ab : d.RootElement; return (r.TryGetProperty("title", out var t) ? t.GetString()! : "OpenNCL v4.0", r.TryGetProperty("author", out var a) ? a.GetString()! : "Chen Tom 2016", r.TryGetProperty("platform", out var p) ? p.GetString()! : "Windows + Python + .NET WinUI 3", r.TryGetProperty("kernel", out var k) ? k.GetString()! : "CL-Kernel v4.0 (Hybrid)", r.TryGetProperty("footer", out var f) ? f.GetString()! : "\"Open source, open mind.\"", r.TryGetProperty("github", out var g) ? g.GetString()! : "github.com/chenTom2016"); } } catch { } return ("OpenNCL v4.0", "Chen Tom 2016", "Windows + Python + .NET WinUI 3", "CL-Kernel v4.0 (Hybrid)", "\"Open source, open mind.\"", "github.com/chenTom2016"); }
-        static void SaveCfg((string title, string author, string platform, string kernel, string footer, string github) c) { try { Directory.CreateDirectory(Path.GetDirectoryName(CfgPath())!); var brand = "{\"name\":\"OpenNCL\",\"version\":\"v4.0\",\"prompt\":\"openncl> \",\"pro_prompt\":\"root@Command:~# \"}"; if (File.Exists(CfgPath())) { using var d = JsonDocument.Parse(File.ReadAllText(CfgPath())); if (d.RootElement.TryGetProperty("brand", out var br)) brand = br.GetRawText(); } var about = $"{{\"title\":\"{JsonEscape(c.title)}\",\"author\":\"{JsonEscape(c.author)}\",\"platform\":\"{JsonEscape(c.platform)}\",\"kernel\":\"{JsonEscape(c.kernel)}\",\"footer\":\"{JsonEscape(c.footer)}\",\"github\":\"{JsonEscape(c.github)}\"}}"; File.WriteAllText(CfgPath(), $"{{\"about\":{about},\"brand\":{brand}}}"); } catch { } }
+        static void SaveCfg((string title, string author, string platform, string kernel, string footer, string github) c) { try { Directory.CreateDirectory(Path.GetDirectoryName(CfgPath())!); var brand = "{\"name\":\"OpenNCL\",\"version\":\"v4.0\",\"prompt\":\"openncl> \",\"pro_prompt\":\"root@Command:~# \"}"; var ai = "{}"; if (File.Exists(CfgPath())) { using var d = JsonDocument.Parse(File.ReadAllText(CfgPath())); if (d.RootElement.TryGetProperty("brand", out var br)) brand = br.GetRawText(); if (d.RootElement.TryGetProperty("ai", out var a)) ai = a.GetRawText(); } var about = $"{{\"title\":\"{JsonEscape(c.title)}\",\"author\":\"{JsonEscape(c.author)}\",\"platform\":\"{JsonEscape(c.platform)}\",\"kernel\":\"{JsonEscape(c.kernel)}\",\"footer\":\"{JsonEscape(c.footer)}\",\"github\":\"{JsonEscape(c.github)}\"}}"; File.WriteAllText(CfgPath(), $"{{\"about\":{about},\"brand\":{brand},\"ai\":{ai}}}"); } catch { } }
         static string JsonEscape(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n");
 
         static string Find(string raw) { var q = Regex.Replace(raw, @"^(search\s+)", "", RegexOptions.IgnoreCase).Trim(); if (string.IsNullOrWhiteSpace(q)) return "[ERROR] Usage: search <file name>"; var exe = FindEs(); if (exe == null) return "[ERROR] Everything CLI (es.exe) not found."; try { var p = Process.Start(new ProcessStartInfo(exe, "-n 50 \"" + q.Replace("\"", "\"\"") + "\"") { UseShellExecute = false, RedirectStandardOutput = true, CreateNoWindow = true }); if (p == null) return "[ERROR] Failed to start."; if (!p.WaitForExit(5000)) { try { p.Kill(); } catch { } return "[ERROR] Timeout."; } var o = (p.StandardOutput.ReadToEnd() ?? "").Trim(); return string.IsNullOrWhiteSpace(o) ? "No results." : o; } catch (Exception e) { return "[ERROR] " + e.Message; } }
@@ -731,6 +866,9 @@ namespace OpenNCL_Lancher
                 $"  History     : {_history.Count} entries",
                 $"  Commands    : {_cmdCount} executed",
                 $"  Brand       : {c.title}",
+                $"  AI Provider : {_aiProvider}",
+                $"  AI Model    : {_aiModel}",
+                $"  AI Key      : {(_aiApiKey.Length > 0 ? "configured" : "not set")}",
                 "",
                 "  Forwarded commands (need Python): x++, logo, sandbox, bridge, edit, translate, qrcode",
                 "  Try: help | about | dir | sysinfo | date | pwd | terminfo | diag",
@@ -793,22 +931,487 @@ namespace OpenNCL_Lancher
             try
             {
                 var brand = $"{{\"name\":\"OpenNCL\",\"version\":\"v4.0\",\"prompt\":\"{JsonEscape(_promptStr.Trim())}\",\"pro_prompt\":\"{JsonEscape(_proPromptStr.Trim())}\"}}";
-                string content;
+                string about = "{}", ai = "{}";
                 if (File.Exists(CfgPath()))
                 {
                     using var d = JsonDocument.Parse(File.ReadAllText(CfgPath()));
-                    var about = d.RootElement.TryGetProperty("about", out var ab) ? ab.GetRawText() : "{}";
-                    content = $"{{\"about\":{about},\"brand\":{brand}}}";
-                }
-                else
-                {
-                    var about = "{\"title\":\"OpenNCL v4.0\",\"author\":\"Chen Tom 2016\",\"platform\":\"Windows + Python + .NET WinUI 3\",\"kernel\":\"CL-Kernel v4.0 (Hybrid)\",\"footer\":\"\\\"Open source, open mind.\\\"\",\"github\":\"github.com/chenTom2016\"}";
-                    content = $"{{\"about\":{about},\"brand\":{brand}}}";
+                    if (d.RootElement.TryGetProperty("about", out var ab)) about = ab.GetRawText();
+                    if (d.RootElement.TryGetProperty("ai", out var a)) ai = a.GetRawText();
                 }
                 Directory.CreateDirectory(Path.GetDirectoryName(CfgPath())!);
-                File.WriteAllText(CfgPath(), content);
+                File.WriteAllText(CfgPath(), $"{{\"about\":{about},\"brand\":{brand},\"ai\":{ai}}}");
             }
             catch { }
         }
+
+        // ==================== AI SIDEBAR ====================
+        private void ToggleSidebar(bool? force = null)
+        {
+            var isOpen = SidebarColumn.Width.Value > 0;
+            var shouldOpen = force ?? !isOpen;
+            SidebarColumn.Width = new GridLength(shouldOpen ? 420 : 0);
+            if (shouldOpen)
+            {
+                AiPanel.SetConfig(_aiApiUrl, _aiApiKey, _aiModel, _aiProvider);
+                PushContextToSidebar();
+                AiPanel.FocusPanel();
+            }
+            else
+            {
+                RootGrid.Focus(FocusState.Programmatic);
+            }
+        }
+
+        // ==================== COMMAND PALETTE (Ctrl+Shift+P) ====================
+        private static bool IsCtrlDown() =>
+            (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
+                & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+
+        private static bool IsShiftDown() =>
+            (Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
+                & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+
+        private bool PaletteOpen => CommandPaletteOverlay.Visibility == Visibility.Visible;
+
+        private void OpenCommandPalette()
+        {
+            CommandPaletteOverlay.Visibility = Visibility.Visible;
+            PaletteSearch.Text = "";
+            FilterPalette("");
+            PaletteSearch.Focus(FocusState.Programmatic);
+        }
+
+        private void CloseCommandPalette()
+        {
+            CommandPaletteOverlay.Visibility = Visibility.Collapsed;
+            RootGrid.Focus(FocusState.Programmatic);
+        }
+
+        private void FilterPalette(string query)
+        {
+            query = query.Trim().ToLower();
+            _paletteFiltered = string.IsNullOrEmpty(query)
+                ? CommandCatalog.ToList()
+                : CommandCatalog.Where(c => c.Name.ToLower().Contains(query) || c.Desc.ToLower().Contains(query)).ToList();
+
+            PaletteList.Items.Clear();
+            foreach (var (name, desc) in _paletteFiltered)
+                PaletteList.Items.Add($"{name,-20}  {desc}");
+
+            if (PaletteList.Items.Count > 0)
+                PaletteList.SelectedIndex = 0;
+        }
+
+        private void ApplyPaletteSelection()
+        {
+            var idx = PaletteList.SelectedIndex;
+            if (idx < 0 || idx >= _paletteFiltered.Count) return;
+            _inputBuf = _paletteFiltered[idx].Name.TrimEnd();
+            CloseCommandPalette();
+            RefreshPrompt(_inputBuf);
+        }
+
+        private void PaletteSearch_TextChanged(object sender, TextChangedEventArgs e) => FilterPalette(PaletteSearch.Text);
+
+        private void PaletteSearch_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            switch (e.Key)
+            {
+                case Windows.System.VirtualKey.Escape:
+                    CloseCommandPalette(); e.Handled = true; break;
+                case Windows.System.VirtualKey.Enter:
+                    ApplyPaletteSelection(); e.Handled = true; break;
+                case Windows.System.VirtualKey.Down:
+                    if (PaletteList.Items.Count > 0)
+                        PaletteList.SelectedIndex = Math.Min(PaletteList.SelectedIndex + 1, PaletteList.Items.Count - 1);
+                    e.Handled = true; break;
+                case Windows.System.VirtualKey.Up:
+                    if (PaletteList.Items.Count > 0)
+                        PaletteList.SelectedIndex = Math.Max(PaletteList.SelectedIndex - 1, 0);
+                    e.Handled = true; break;
+            }
+        }
+
+        private void PaletteList_ItemClick(object sender, ItemClickEventArgs e)
+        {
+            var clicked = e.ClickedItem as string;
+            var idx = PaletteList.Items.IndexOf(clicked);
+            if (idx >= 0) PaletteList.SelectedIndex = idx;
+            ApplyPaletteSelection();
+        }
+
+        private void CommandPaletteOverlay_Tapped(object sender, TappedRoutedEventArgs e) => CloseCommandPalette();
+
+        private void CommandPalettePanel_Tapped(object sender, TappedRoutedEventArgs e) => e.Handled = true;
+
+        private string ExecAi(string prompt)
+        {
+            if (string.IsNullOrWhiteSpace(_aiApiKey))
+                return "[ERROR] AI API key not set.\nUse: config ai key <your-api-key>\n\nSupports any OpenAI-compatible API:\n  OpenAI, Anthropic (via proxy), Ollama, vLLM, local LLMs, etc.";
+
+            ToggleSidebar(true);
+            AiPanel.SendPrompt(prompt);
+            return "__SIDEBAR__";
+        }
+
+        private string ShowAiConfig()
+        {
+            var masked = _aiApiKey.Length > 8 ? _aiApiKey[..4] + "****" + _aiApiKey[^4..] : (_aiApiKey.Length > 0 ? "****" : "(not set)");
+            return $"AI Configuration\n  Provider : {_aiProvider}\n  Model    : {_aiModel}\n  API URL  : {_aiApiUrl}\n  API Key  : {masked}";
+        }
+
+        private string SetAiConfig(string key, string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return $"[ERROR] Usage: config ai {key} <value>";
+            switch (key)
+            {
+                case "model": _aiModel = value; break;
+                case "api": _aiApiUrl = value; break;
+                case "key": _aiApiKey = value; break;
+                case "provider": _aiProvider = value; break;
+                default: return $"[ERROR] Unknown AI config key: {key}";
+            }
+            SaveAiConfig();
+            return $"AI {key} updated.";
+        }
+
+        private void LoadAiConfig()
+        {
+            try
+            {
+                if (File.Exists(CfgPath()))
+                {
+                    using var d = JsonDocument.Parse(File.ReadAllText(CfgPath()));
+                    if (d.RootElement.TryGetProperty("ai", out var ai))
+                    {
+                        if (ai.TryGetProperty("provider", out var p)) _aiProvider = p.GetString()!;
+                        if (ai.TryGetProperty("model", out var m)) _aiModel = m.GetString()!;
+                        if (ai.TryGetProperty("api_url", out var u)) _aiApiUrl = u.GetString()!;
+                        if (ai.TryGetProperty("api_key", out var k)) _aiApiKey = k.GetString()!;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private void SaveAiConfig()
+        {
+            try
+            {
+                string about = "{}", brand = "{}";
+                if (File.Exists(CfgPath()))
+                {
+                    using var d = JsonDocument.Parse(File.ReadAllText(CfgPath()));
+                    if (d.RootElement.TryGetProperty("about", out var ab)) about = ab.GetRawText();
+                    if (d.RootElement.TryGetProperty("brand", out var br)) brand = br.GetRawText();
+                }
+                var ai = $"{{\"provider\":\"{JsonEscape(_aiProvider)}\",\"model\":\"{JsonEscape(_aiModel)}\",\"api_url\":\"{JsonEscape(_aiApiUrl)}\",\"api_key\":\"{JsonEscape(_aiApiKey)}\"}}";
+                Directory.CreateDirectory(Path.GetDirectoryName(CfgPath())!);
+                File.WriteAllText(CfgPath(), $"{{\"about\":{about},\"brand\":{brand},\"ai\":{ai}}}");
+            }
+            catch { }
+        }
+
+        private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "...";
+
+        // ==================== INLINE AI (# prefix) ====================
+        private async Task GenerateCommandAsync(string prompt)
+        {
+            try
+            {
+                var systemMsg = new { role = "system", content = "You are a command-line assistant inside OpenNCL terminal (Windows). Convert the user's natural language request into a SINGLE terminal command. Reply with ONLY the command, no explanation, no markdown, no backticks. Just the raw command." };
+                var userMsg = new { role = "user", content = prompt };
+                var body = JsonSerializer.Serialize(new
+                {
+                    model = _aiModel,
+                    messages = new[] { systemMsg, userMsg },
+                    max_tokens = 200,
+                    temperature = 0.1
+                });
+
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+                var req = new HttpRequestMessage(HttpMethod.Post, _aiApiUrl)
+                {
+                    Content = new StringContent(body, Encoding.UTF8, "application/json")
+                };
+                req.Headers.Add("Authorization", "Bearer " + _aiApiKey);
+
+                var resp = await http.SendAsync(req);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    var errBody = await resp.Content.ReadAsStringAsync();
+                    _dispatch.TryEnqueue(() =>
+                    {
+                        Out("  [AI] API error " + (int)resp.StatusCode, _err);
+                        RenderPrompt();
+                    });
+                    return;
+                }
+
+                using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+                var content = doc.RootElement.TryGetProperty("choices", out var choices) &&
+                              choices[0].TryGetProperty("message", out var msg) &&
+                              msg.TryGetProperty("content", out var ct)
+                              ? ct.GetString()?.Trim()
+                              : null;
+
+                if (string.IsNullOrWhiteSpace(content))
+                {
+                    _dispatch.TryEnqueue(() => { Out("  [AI] No command generated.", _dim); RenderPrompt(); });
+                    return;
+                }
+
+                // Strip markdown backticks if the model ignored instructions
+                content = System.Text.RegularExpressions.Regex.Replace(content, @"^```\w*\n?|```$", "").Trim();
+                if (content.StartsWith("`") && content.EndsWith("`"))
+                    content = content[1..^1].Trim();
+
+                _dispatch.TryEnqueue(() =>
+                {
+                    Out("  AI: " + content, _accent);
+                    _inputBuf = content;
+                    RefreshPrompt(_inputBuf);
+                });
+            }
+            catch (Exception ex)
+            {
+                _dispatch.TryEnqueue(() => { Out("  [AI] " + ex.Message, _err); RenderPrompt(); });
+            }
+        }
+
+        // ==================== TOOL EXECUTOR (Agent Bridge) ====================
+        private async Task<string?> HandleToolCallAsync(string toolName, string argsJson)
+        {
+            BackendDebugHub.Info("tool", $"{toolName} {argsJson}");
+            try
+            {
+                using var args = JsonDocument.Parse(argsJson);
+                var r = args.RootElement;
+
+                return toolName switch
+                {
+                    "exec" => await ExecTool(r),
+                    "read_file" => ReadFileTool(r),
+                    "write_file" => WriteFileTool(r),
+                    "list_dir" => ListDirTool(r),
+                    "search_files" => SearchFilesTool(r),
+                    "get_context" => GetContextJson(),
+                    _ => "[ERROR] Unknown tool: " + toolName
+                };
+            }
+            catch (Exception ex)
+            {
+                BackendDebugHub.Error("tool", ex.Message);
+                return "[ERROR] " + ex.Message;
+            }
+        }
+
+        private static async Task<string> ExecTool(JsonElement args)
+        {
+            var cmd = args.TryGetProperty("command", out var c) ? c.GetString() ?? "" : "";
+            if (string.IsNullOrWhiteSpace(cmd)) return "[ERROR] No command provided";
+
+            try
+            {
+                var psi = new ProcessStartInfo("cmd", "/c " + cmd)
+                {
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                    StandardOutputEncoding = Encoding.UTF8,
+                    StandardErrorEncoding = Encoding.UTF8
+                };
+                // Inherit current directory
+                psi.WorkingDirectory = Environment.CurrentDirectory;
+
+                using var p = Process.Start(psi);
+                if (p == null) return "[ERROR] Failed to start process";
+
+                var stdout = await p.StandardOutput.ReadToEndAsync();
+                var stderr = await p.StandardError.ReadToEndAsync();
+                await p.WaitForExitAsync();
+
+                var sb = new StringBuilder();
+                if (!string.IsNullOrWhiteSpace(stdout)) sb.Append(stdout.TrimEnd());
+                if (!string.IsNullOrWhiteSpace(stderr))
+                {
+                    if (sb.Length > 0) sb.AppendLine();
+                    sb.Append("[STDERR] ").Append(stderr.TrimEnd());
+                }
+                if (sb.Length == 0) sb.Append("(no output, exit code: ").Append(p.ExitCode).Append(')');
+                return sb.ToString();
+            }
+            catch (Exception ex)
+            {
+                return "[ERROR] " + ex.Message;
+            }
+        }
+
+        private static string ReadFileTool(JsonElement args)
+        {
+            var path = args.TryGetProperty("path", out var p) ? p.GetString() ?? "" : "";
+            if (string.IsNullOrWhiteSpace(path)) return "[ERROR] No path provided";
+
+            try
+            {
+                if (!Path.IsPathRooted(path))
+                    path = Path.Combine(Environment.CurrentDirectory, path);
+                path = Path.GetFullPath(path);
+
+                if (!File.Exists(path)) return "[ERROR] File not found: " + path;
+
+                var content = File.ReadAllText(path, Encoding.UTF8);
+                if (content.Length > 10000)
+                    content = content[..10000] + $"\n\n... (truncated, total {content.Length} chars)";
+                return content;
+            }
+            catch (Exception ex)
+            {
+                return "[ERROR] " + ex.Message;
+            }
+        }
+
+        private static string WriteFileTool(JsonElement args)
+        {
+            var path = args.TryGetProperty("path", out var p) ? p.GetString() ?? "" : "";
+            var content = args.TryGetProperty("content", out var c) ? c.GetString() ?? "" : "";
+            if (string.IsNullOrWhiteSpace(path)) return "[ERROR] No path provided";
+
+            try
+            {
+                if (!Path.IsPathRooted(path))
+                    path = Path.Combine(Environment.CurrentDirectory, path);
+                path = Path.GetFullPath(path);
+
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllText(path, content, Encoding.UTF8);
+                return "File written: " + path + " (" + content.Length + " chars)";
+            }
+            catch (Exception ex)
+            {
+                return "[ERROR] " + ex.Message;
+            }
+        }
+
+        private static string ListDirTool(JsonElement args)
+        {
+            var path = args.TryGetProperty("path", out var p) ? p.GetString() : null;
+            if (string.IsNullOrWhiteSpace(path)) path = Environment.CurrentDirectory;
+
+            try
+            {
+                if (!Path.IsPathRooted(path))
+                    path = Path.Combine(Environment.CurrentDirectory, path);
+                path = Path.GetFullPath(path);
+
+                if (!Directory.Exists(path)) return "[ERROR] Directory not found: " + path;
+
+                var sb = new StringBuilder();
+                sb.AppendLine(path);
+                sb.AppendLine(new string('-', Math.Min(path.Length, 60)));
+
+                foreach (var d in Directory.GetDirectories(path))
+                    sb.AppendLine("  [DIR]  " + Path.GetFileName(d));
+                foreach (var f in Directory.GetFiles(path))
+                {
+                    try
+                    {
+                        var fi = new FileInfo(f);
+                        sb.AppendLine($"  {fi.Length,10:N0}  {fi.Name}");
+                    }
+                    catch { sb.AppendLine($"  {"???",10}  {Path.GetFileName(f)}"); }
+                }
+                return sb.ToString();
+            }
+            catch (Exception ex)
+            {
+                return "[ERROR] " + ex.Message;
+            }
+        }
+
+        private static string SearchFilesTool(JsonElement args)
+        {
+            var pattern = args.TryGetProperty("pattern", out var p) ? p.GetString() ?? "" : "";
+            var directory = args.TryGetProperty("directory", out var d) ? d.GetString() : null;
+            if (string.IsNullOrWhiteSpace(pattern)) return "[ERROR] No pattern provided";
+            if (string.IsNullOrWhiteSpace(directory)) directory = Environment.CurrentDirectory;
+
+            try
+            {
+                if (!Path.IsPathRooted(directory))
+                    directory = Path.Combine(Environment.CurrentDirectory, directory);
+                directory = Path.GetFullPath(directory);
+
+                if (!Directory.Exists(directory)) return "[ERROR] Directory not found: " + directory;
+
+                // Try Everything ES first for speed
+                var esExe = FindEs();
+                if (esExe != null)
+                {
+                    var psi = new ProcessStartInfo(esExe, "-n 50 \"" + pattern.Replace("\"", "\"\"") + "\" " + directory)
+                    {
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        CreateNoWindow = true
+                    };
+                    using var proc = Process.Start(psi);
+                    if (proc != null)
+                    {
+                        proc.WaitForExit(5000);
+                        var output = (proc.StandardOutput.ReadToEnd() ?? "").Trim();
+                        if (!string.IsNullOrWhiteSpace(output)) return output;
+                    }
+                }
+
+                // Fallback: .NET Directory.EnumerateFiles
+                var results = Directory.EnumerateFiles(directory, pattern, new EnumerationOptions
+                {
+                    RecurseSubdirectories = true,
+                    MaxRecursionDepth = 5,
+                    IgnoreInaccessible = true
+                }).Take(50).ToList();
+
+                if (results.Count == 0) return "No files found matching: " + pattern;
+                return string.Join("\n", results);
+            }
+            catch (Exception ex)
+            {
+                return "[ERROR] " + ex.Message;
+            }
+        }
+
+        // ==================== CONTEXT PROVIDER ====================
+        private string GetContextJson()
+        {
+            var recent = _history.Count > 0
+                ? string.Join(" | ", _history.Skip(Math.Max(0, _history.Count - 5)))
+                : "(none)";
+            var ctx = new
+            {
+                cwd = Environment.CurrentDirectory,
+                os = "Windows " + Environment.OSVersion.VersionString,
+                mode = _mode,
+                recentCommands = recent,
+                kernelType = _nativeKernel ? "native" : "python",
+                pythonOnline = _launcher.KernelReady
+            };
+            return JsonSerializer.Serialize(ctx);
+        }
+
+        private void PushContextToSidebar()
+        {
+            var recent = _history.Count > 0
+                ? string.Join(" | ", _history.Skip(Math.Max(0, _history.Count - 5)))
+                : "(none)";
+            AiPanel.SendContext(
+                Environment.CurrentDirectory,
+                "Windows " + Environment.OSVersion.VersionString,
+                _mode,
+                recent
+            );
+        }
+
+        // ==================== AI SIDEBAR END ====================
     }
 }

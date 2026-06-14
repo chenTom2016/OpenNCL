@@ -1,7 +1,0 @@
-calculator		Call Calculator		
-dir			Scan Directory	
-date			Display time
-exit			Exit the command line
-help			Help
-qrcode			Generate QR code
-screenshot		screenshot

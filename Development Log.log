@@ -1,0 +1,374 @@
+============================================================
+  OpenNCL v4.0 — Development Log
+  Last updated: 2026-06-07 (Session 5)
+============================================================
+
+
+
+
+
+
+
+[Session 5 — 2026-06-07]
+  Plugin module + Command palette + Animation performance + Build warning cleanup
+  (Implements requirement #2 "Plugin module" from Change request.md, plus a new command palette)
+
+  1) Python script plugin module (hot-pluggable, no C# recompile):
+     New plugins/ directory; drop in a .py file to add a command. The kernel
+     scans and loads them automatically on startup.
+     Plugin contract: COMMAND (command name) / DESCRIPTION (text) / run(args) -> str
+     New files:
+       plugins/__init__.py          — package marker (empty)
+       plugins/example_hello.py     — sample plugin (the "hello" command)
+     kernel/openncl_kernel.py:
+       + __init__ calls _load_plugins(): importlib scans plugins/*.py,
+         validates COMMAND + run, stores into self.plugins; failures are
+         recorded in plugin_errors without crashing.
+       + exec() dispatch chain matches plugins by first token at the end
+         (after URL detection) and runs them.
+       + New "plugins" command: lists loaded plugins + load errors.
+     MainWindow.xaml.cs: Exec() routes "plugins" -> __FORWARD__ (to kernel).
+       (Other plugin commands flow through the "unknown command fallback
+        forward" path, so they work automatically — no per-command branch.)
+     Works on both native and Python paths: both import the same kernel,
+     so logic only needs to live in the kernel.
+
+  2) WinUI command palette (Ctrl+Shift+P, VSCode-style):
+     MainWindow.xaml: added CommandPaletteOverlay at the end of RootGrid
+       (translucent scrim + centered panel: search TextBox + command ListView).
+     MainWindow.xaml.cs:
+       + CommandCatalog: ~50 commands with descriptions as the search source.
+       + RootGrid_KeyDown intercepts Ctrl+Shift+P -> OpenCommandPalette().
+       + Search box: TextChanged fuzzy filter / Up-Down move selection /
+         Enter confirm / Esc close.
+       + Selected command -> inserted into the terminal input line (not
+         auto-executed, so args can be appended) -> focus returns to terminal.
+       + Click scrim to close; click panel does not close (Tapped bubbling).
+     Modifier key detection: InputKeyboardSource.GetKeyStateForCurrentThread.
+
+  3) Performance — reuse animation brushes:
+     MainWindow.xaml.cs: the 4 background orbs previously allocated a new
+       RadialGradientBrush + 2 GradientStops every frame (~720 objects/sec,
+       constant GC pressure).
+     Now: InitRainbow creates the 4 brushes once, caches them in _orbBrushes[]
+       and binds orb.Fill. ApplyOrb only updates position/size and mutates
+       GradientStops[].Color on the cached brush — no more allocations.
+       -> Zero allocation on the animation hot path.
+
+  4) Build warning cleanup:
+     - NETSDK1198 (missing win-AnyCPU.pubxml, prior known issue #5):
+       Added Condition="'$(Platform)'!='AnyCPU'" to the csproj PublishProfile.
+       No profile is specified under AnyCPU, clearing the warning; x64/arm64/x86
+       publishing still works correctly.
+     - PRI249 (CPYTHON-311 invalid resource qualifier):
+       Caused by __pycache__/*.pyc being captured by the Content wildcard.
+       Added Exclude="...\__pycache__\**" to each Python Content dir, so .pyc
+       caches are no longer packaged.
+
+  5) Fixed paste bug (Ctrl+V did not work):
+     Root cause: the terminal uses self-drawn input (RootGrid KeyDown /
+       CharReceived + _inputBuf), with no real TextBox. KeyDown did not handle
+       Ctrl+V, and CharReceived returned early on control chars < 0x20
+       (Ctrl+V produces 0x16), so clipboard content never reached the buffer.
+     MainWindow.xaml.cs:
+       + RootGrid_KeyDown intercepts Ctrl+V -> PasteFromClipboard().
+       + PasteFromClipboard(): Clipboard.GetContent().GetTextAsync() reads text;
+         since terminal input is single-line, newlines/tabs are collapsed to
+         spaces, appended to _inputBuf, and the prompt line is refreshed.
+     (The palette search box PaletteSearch is a native TextBox and AiSidebar
+      is a WebView2 — both have built-in paste and are unaffected; this change
+      only covers the main terminal input area.)
+
+  Modified files:
+     MainWindow.xaml / MainWindow.xaml.cs
+     kernel/openncl_kernel.py
+     OpenNCL Lancher.csproj
+  New files:
+     plugins/__init__.py, plugins/example_hello.py
+
+  Verification:
+     [OK]   python python/launcher.py: "plugins" lists hello; "hello World"
+            returns a greeting.
+     [OK]   dotnet build -c Debug -r win-x64: 0 errors (NETSDK1198 / PRI249 gone).
+     [WARN] 2 pre-existing dead-code warnings remain (AgentLoop._disposed /
+            AiSidebar.TerminalContextRequested); not introduced this session,
+            related files untouched.
+
+[Session 4 — 2026-05-30]
+  AI sidebar module — WebView2 + TypeScript (inspired by cc-haha / Warp)
+
+  Architecture (final):
+    MainWindow root Grid uses a 2-column layout: Column 0 terminal +
+      Column 1 AiSidebar.
+    AiSidebar = WebView2 container -> loads webui/ai-sidebar.html
+      (self-contained TS app).
+    TS handles independently: SSE streaming requests, chat UI rendering,
+      conversation state management.
+    C# only handles: API config persistence, panel show/hide, C#<->TS bridge.
+    Tab key toggles the sidebar (420px / 0px).
+
+  C#<->TS communication protocol:
+    C# -> TS: CoreWebView2.ExecuteScriptAsync("window.setConfig({...})")
+    C# -> TS: ExecuteScriptAsync("window.sendPrompt('...')")
+    TS -> C#: chrome.webview.postMessage({ type: 'close' })
+
+  New file (1):
+    webui/ai-sidebar.html         — self-contained HTML+JS AI chat page (~280 lines)
+       - CSS: dark theme (bg #0D0D12, user bubble #00E5A0, assistant bubble #1A1A2E)
+       - UI: Header (title + model badge + Clear/x), Chat (messages + auto-scroll),
+             Input (textarea + Send)
+       - SSE streaming: fetch() -> ReadableStream -> parse lines "data:" ->
+             appendToLastMessage()
+       - Keyboard: Enter = send, Shift+Enter = newline, Escape = close
+       - State: messages[], streaming flag, AbortController
+
+  Rewritten file (1):
+    AiSidebar.xaml + .xaml.cs
+       - xaml: WebView2 control (Microsoft.UI.Xaml.Controls.WebView2)
+       - cs: LoadAsync (load html), SetConfig/SendPrompt/FocusInput
+             (via ExecuteScriptAsync)
+       - cs: OnWebMessage listens for the TS->C# close event
+       - Removed: original XAML ItemsControl/TextBox chat UI (replaced by WebView2)
+
+  Deleted files (2):
+    Services/AiChatService.cs     — SSE parsing moved into the TS fetch API
+    Models/ChatMessage.cs         — message model now managed on the TS side
+
+  Simplified files (2):
+    MainWindow.xaml (kept)
+       - RootGrid column structure unchanged
+       - Top bar "Tab = AI" hint
+
+    MainWindow.xaml.cs
+       - Removed: _aiService, _aiCts, SendToAi(), OnAiPrompt()
+       - Removed usings: Services, Models, System.Threading, System.Linq
+       - Simplified ToggleSidebar: now calls AiPanel.SetConfig() + FocusInput()
+       - Simplified ExecAi: calls AiPanel.SendPrompt() to send to WebView2
+       - Added: _ = AiPanel.LoadAsync() to preload WebView2
+       - Kept: LoadAiConfig/SaveAiConfig/ShowAiConfig/SetAiConfig unchanged
+
+  Compared to cc-haha:
+    cc-haha: Tauri 2 (Rust) + WebView + React/TS frontend
+    OpenNCL: WinUI 3 (C#) + WebView2 + vanilla JS (self-contained, zero build)
+    In common: native shell + WebView AI panel + postMessage IPC
+
+  Build: dotnet build -c Debug -r win-x64 -> 0 errors, 0 new warnings
+
+[Session 3 — 2026-05-17]
+  Fixed frontend-backend connection — 4 key fixes:
+
+  1) Path resolution: GetPythonScriptPath() now searches upward recursively
+     for python/launcher.py (up to 6 levels). Fixes the script-not-found
+     issue when the -r win-x64 build output path is too deep.
+
+  2) Startup handshake: launcher.py sends a __READY__ signal on startup; the
+     C# side waits for the handshake to complete (5s timeout). Added a
+     KernelReady property that accurately reflects kernel state, replacing
+     the blind 200ms wait.
+
+  3) Double-send bug fix: forwarded commands (x++/logo/sandbox/edit/translate/
+     qrcode) no longer call SendCommand directly in Exec(); they uniformly
+     return the "__FORWARD__" marker, and TryForward() sends them once.
+     Old code: Exec sent once + TryForward sent again = every command ran twice.
+
+  4) Better error messages: when the kernel is offline, TryForward shows
+     "Python kernel offline" instead of "Unknown command". For unknown
+     commands, Execute shows the C# suggestion first, then forwards to Python
+     (the Python kernel has its own fuzzy matching).
+
+  kernel/__init__.py: ensures Python package import compatibility.
+  Git init: .gitignore + initial commit (36 files, 4229 lines) + fix commit
+     (3 files, +41/-20).
+
+[Session 2 — 2026-05-16]
+  - Rainbow background orbs, 60fps smooth flow: the 4-second jump became
+    per-frame interpolation (speed 0.004~0.014/frame).
+  - Layout refactored to HTML-terminal style: top bar (3-dot + title + v4.0
+    badge) + terminal area + bottom bar (mode / status / command count).
+    Bottom bar live-updates: ModeIndicator (Normal / Pro orange) /
+    StatusText (Online / Kernel offline) / CmdCountText.
+  - Fixed WinUI 3 build error: Path ambiguity (Microsoft.UI.Xaml.Shapes.Path
+    vs System.IO.Path). Removed `using Microsoft.UI.Xaml.Shapes;` and used the
+    fully-qualified Ellipse -> 0 build errors.
+  - Implemented real color() terminal theme switching: change foreground /
+    background at runtime.
+    Added ColorNames dictionary (black/red/green/blue/yellow/cyan/magenta/
+    white/gray/orange/purple).
+    Dynamic SolidColorBrush (_fg/_err/_dim/_accent/_path) replaces static fields.
+  - New terminfo command: view terminal Mode/Prompt/ProPrompt/CWD/History/
+    Kernel/Brand/Commands.
+  - config prompt <text> / config pro_prompt <text>: custom prompts, persisted
+    to brand.json.
+  - Mode Pro visual enhancement: accent color turns orange (#FFA500) when
+    entering Pro mode, restored on exit.
+  - LoadPrompts(): loads custom prompts from brand.json on startup.
+  - Standalone HTML terminal (webui/standalone.html) enhancements:
+       + color(fg,bg): actually changes HTML terminal colors (body background,
+         caret, accent)
+       + qrcode <text>: inline QR link + qrserver API preview
+       + translate <from> <to> <text>: translation command skeleton
+       + terminfo: terminal status info
+       + pwd: show current path (browser URL)
+       + config prompt / config pro_prompt: custom terminal prompts
+       + kill <name>: process control hint
+       + enhanced sysinfo: Screen/Vendor info
+       + enhanced help text: includes all new commands
+  - Copied standalone.html from Desktop into the project webui directory.
+  - Python kernel: synced the terminfo command.
+
+[Project architecture]
+  WinUI 3 (C#) --stdin/stdout--> Python (launcher.py)
+       |                              |
+  built-in commands return     kernel/openncl_kernel.py
+  directly                           |
+                               Flask WebUI (optional, port 7878)
+
+[Implemented features]
+  [x] WinUI 3 desktop launcher — builds with zero errors
+  [x] Fullscreen terminal: no top/bottom bar, no sidebar; pure terminal feel
+  [x] Inline input: prompt inside the terminal content area, no input box
+      (RichTextBlock)
+  [x] Path display: current dir shown before the prompt (supports cd, ~ collapse)
+  [x] Background: MicaBackdrop + rainbow gradient orb animation (4 dynamic orbs)
+  [x] 50+ commands, dual engine: C# local execution + Python kernel forwarding
+  [x] Python kernel: prints ASCII logo on startup, full command set
+  [x] Error feedback: [ERROR] + "Did you mean?" Levenshtein fuzzy matching
+  [x] Command history: up/down arrow navigation
+  [x] Contextual help: help command
+  [x] Color support: color(fg,bg) genuinely changes the terminal theme
+  [x] Performance timing: [x.xms] shows each command's execution time
+  [x] config about <key> <value> edits brand info at runtime, persisted to
+      brand.json
+  [x] edit about / config about show manage the about-page content
+  [x] config prompt / config pro_prompt custom prompts, persisted
+  [x] terminfo terminal status query
+  [x] Mode Pro visual enhancement (orange accent prompt)
+  [x] FillViewport: pads blank lines on startup so the terminal fills the window
+  [x] Default window size 1050x680
+  [x] Keyboard-only operation, hidden TextBox receives input
+  [x] search <name>: Everything (es.exe) ultra-fast file search
+  [x] Standalone HTML terminal: standalone.html, 30+ commands
+
+[Full command list]
+  Basic   : help about date time version ver dir ls sysinfo
+            system modules clear cls exit quit cd pwd ip terminfo
+  Tools   : calc calculate echo encrypt decrypt color()
+            install search kill
+  Web     : google bing youtube open {search:} {open:}
+            direct URLs auto-detected and opened
+  System  : cmd powershell explorer notepad control
+            taskmgr mspaint regedit python node
+  Advanced: mode pro x++ logo sandbox bridge edit translate
+            linux wsl
+  GUI     : calculator screenshot qrcode
+  Config  : config about <key> <value>  edit about  config about show
+            config prompt <text>  config pro_prompt <text>
+
+[File inventory & line counts]
+
+  C# (WinUI 3) ---------------------------------- ~700 lines
+    App.xaml                    16 lines — Application entry
+    App.xaml.cs                 50 lines — OnLaunched starts MainWindow
+    MainWindow.xaml             36 lines — terminal UI (MicaBackdrop + Canvas
+                                           + RichTextBlock + hidden TextBox)
+    MainWindow.xaml.cs         388 lines — all logic: 50+ command routing,
+                                           rainbow animation, prompt rendering,
+                                           history, config, color theme,
+                                           prompt customization
+    Runtime/PythonLauncher.cs  215 lines — Python process management, async
+                                           stdout/stderr reading, graceful shutdown
+
+  Python kernel --------------------------------- 2,200+ lines
+    kernel/openncl_kernel.py   600 lines — OpenNCLKernel class, ~42 commands,
+                                           Levenshtein fuzzy suggest, terminfo
+    python/launcher.py          41 lines — stdin/stdout protocol bridge entry
+    python/OpenNCL.py         1440 lines — v3.1 original tkinter version
+                                           (reference; Calculator/Screenshot/QR GUI)
+    cli/openncl_cli.py          14 lines — pure Python CLI entry
+    server/openncl_server.py    71 lines — Flask WebUI backend, 5 REST endpoints
+
+  WebUI frontend -------------------------------- 500+ lines
+    webui/index.html            19 lines — HTML5 terminal shell (scanline effect)
+    webui/app.js               174 lines — frontend terminal emulator
+                                           (history / keyboard / API calls)
+    webui/style.css             81 lines — dark terminal theme (Cascadia Code,
+                                           scanlines, custom scrollbar)
+    webui/standalone.html      310 lines — standalone enhanced HTML terminal
+                                           (30+ commands, rainbow logo, top/bottom
+                                           bar, theme switching)
+
+  Config & data --------------------------------
+    config/brand.json           16 lines — brand config + custom prompt persistence
+    python/config.json           6 lines — QR generator defaults
+    python/ascii_logo_color.txt 95 lines — multi-font ASCII art banner
+    python/help.txt              7 lines — short help text
+
+  Build config ---------------------------------
+    OpenNCL Lancher.csproj      68 lines — .NET 8 WinUI 3, Windows App SDK 1.8,
+                                           ReadyToRun
+    Package.appxmanifest        51 lines — MSIX package manifest
+    app.manifest                19 lines — compatibility declaration
+    requirements.txt             1 line  — Python: flask
+    Properties/PublishProfiles/         — win-x64 / win-arm64 / win-x86
+
+  ----------------------------------------------
+  Total (source): ~3,500 lines  |  Files: 30+
+
+[Architecture notes]
+  1. MainWindow runs ~50 built-in commands directly in C# (help/about/sysinfo/
+     dir/calc/search/kill/terminfo, etc.).
+  2. color() switches the terminal theme at runtime; config prompt customizes
+     the prompt; terminfo views status.
+  3. Advanced commands (logo/sandbox/bridge/qrcode/translate/screenshot/x++)
+     forward to the Python kernel.
+  4. PythonLauncher communicates with launcher.py asynchronously via process
+     stdin/stdout.
+  5. launcher.py calls OpenNCLKernel.exec() to handle commands and return results.
+  6. The Flask server exposes a REST API; the WebUI frontend calls it via fetch.
+  7. standalone.html is a fully standalone HTML terminal (no backend needed).
+
+[C# built-in commands (no Python)]
+  help, about, version, ver, date, time, dir, ls, pwd, sysinfo, system,
+  modules, clear, cls, exit, quit, cd, echo, calc, calculate, color(),
+  google, bing, youtube, open, {search:}, {open:}, encrypt, decrypt,
+  search, kill, cmd, powershell, explorer, notepad, control, taskmgr,
+  mspaint, regedit, python, node, calculator, screenshot, mode pro,
+  linux, wsl, config about, edit about, config prompt, config pro_prompt,
+  terminfo, direct URLs
+
+[Python kernel commands (stdin/stdout forwarding)]
+  x++, logo show/save, sandbox, bridge start, edit, translate, qrcode
+
+[Build & run]
+  cd "C:\Users\chenxinyan\source\repos\OpenNCL Lancher\OpenNCL Lancher"
+  dotnet build -c Debug -r win-x64     (build)
+  dotnet run -c Debug -r win-x64       (run)
+  Prerequisites: Windows App SDK Runtime 1.8+, python on PATH
+
+  # WebUI mode
+  cd python; python ..\server\openncl_server.py
+  Visit http://127.0.0.1:7878
+
+  # CLI mode
+  cd python; python ..\cli\openncl_cli.py
+
+  # Standalone HTML terminal
+  Open webui/standalone.html
+
+[Standalone HTML terminal]
+  File: webui/standalone.html
+  [x] Rainbow logo + scanlines + top bar (3-dot) + bottom bar (status)
+  [x] Inline input + 30+ commands
+  [x] color() theme switching + terminfo + config prompt
+  [x] qrcode / translate / pwd
+
+[Known issues]
+  1. The XAML compiler (3.0.0.2512) silently crashes with multiple ListViews
+     (this project has none, so it is avoided).
+  2. Packaging/publishing requires MSIX or SelfContained mode.
+  3. Kind="BaseAlt" is not supported in this SDK version.
+  4. ExtendsContentIntoTitleBar is not supported.
+  5. win-AnyCPU.pubxml publish profile is missing (non-critical; resolved in
+     Session 5).
+
+============================================================

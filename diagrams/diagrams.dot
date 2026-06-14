@@ -1,0 +1,129 @@
+ OpenNCL Lancher/
+  ├─ .gitignore
+  ├─ Development Log.log
+  ├─ introduction.log
+  ├─ launch.cmd
+  ├─ OpenNCL Lancher.slnx
+  ├─ README.md
+  ├─ diagrams/
+  │   ├─ diagram.txt
+  │   └─ 2026-06-14T174353/
+  │       └─ diagram.svg
+  │
+  └─ OpenNCL Lancher/
+     ├─ App.xaml
+     ├─ App.xaml.cs
+     ├─ MainWindow.xaml
+     ├─ MainWindow.xaml.cs
+     ├─ AiSidebar.xaml
+     ├─ AiSidebar.xaml.cs
+     ├─ DebugWindow.xaml
+     ├─ DebugWindow.xaml.cs
+     ├─ app.manifest
+     ├─ Package.appxmanifest
+     ├─ OpenNCL Lancher.csproj
+     ├─ OpenNCL Lancher.csproj.user
+     ├─ Change request.md
+     ├─ requirements.txt
+     │
+     ├─ .vscode/
+     │   ├─ launch.json
+     │   └─ tasks.json
+     │
+     ├─ Properties/
+     │   ├─ launchSettings.json
+     │   └─ PublishProfiles/
+     │       ├─ win-arm64.pubxml
+     │       ├─ win-x64.pubxml
+     │       └─ win-x86.pubxml
+     │
+     ├─ Assets/
+     │   ├─ LockScreenLogo.scale-200.png
+     │   ├─ OpenNCLLogo.svg
+     │   ├─ SplashScreen.scale-200.png
+     │   ├─ Square150x150Logo.scale-200.png
+     │   ├─ Square44x44Logo.scale-200.png
+     │   ├─ Square44x44Logo.targetsize-24_altform-unplated.png
+     │   ├─ StoreLogo.png
+     │   └─ Wide310x150Logo.scale-200.png
+     │
+     ├─ Runtime/
+     │   ├─ AgentLoop.cs
+     │   ├─ BackendDebugHub.cs
+     │   ├─ OpenNclNative.cs
+     │   └─ PythonLauncher.cs
+     │
+     ├─ native/
+     │   └─ OpenNclNative/
+     │       ├─ README.md
+     │       ├─ OpenNclNative.vcxproj
+     │       ├─ openncl_native.cpp
+     │       ├─ OpenNclNative/
+     │       └─ x64/
+     │           └─ Release/
+     │
+     ├─ kernel/
+     │   ├─ __init__.py
+     │   ├─ openncl_kernel.py
+     │   └─ __pycache__/
+     │       ├─ __init__.cpython-311.pyc
+     │       └─ openncl_kernel.cpython-311.pyc
+     │
+     ├─ plugins/
+     │   ├─ __init__.py
+     │   ├─ example_hello.py
+     │   └─ __pycache__/
+     │       └─ example_hello.cpython-311.pyc
+     │
+     ├─ python/
+     │   ├─ launcher.py
+     │   ├─ OpenNCL.py
+     │   ├─ config.json
+     │   ├─ ascii_logo_color.txt
+     │   └─ tools/
+     │       └─ __pycache__/
+     │
+     ├─ server/
+     │   └─ openncl_server.py
+     │
+     ├─ cli/
+     │   └─ openncl_cli.py
+     │
+     ├─ webui/
+     │   ├─ ai-sidebar.html
+     │   ├─ app.js
+     │   ├─ index.html
+     │   ├─ standalone.html
+     │   └─ style.css
+     │
+     ├─ config/
+     │   └─ brand.json
+     │
+     ├─ bin/
+     │   ├─ Debug/
+     │   │   └─ net8.0-windows10.0.19041.0/
+     │   │       └─ win-x64/
+     │   └─ x64/
+     │       └─ Debug/
+     │           └─ net8.0-windows10.0.19041.0/
+     │
+     └─ obj/
+         ├─ OpenNCL Lancher.csproj.nuget.dgspec.json
+         ├─ OpenNCL Lancher.csproj.nuget.g.props
+         ├─ OpenNCL Lancher.csproj.nuget.g.targets
+         ├─ project.assets.json
+         ├─ project.nuget.cache
+         ├─ Debug/
+         │   └─ net8.0-windows10.0.19041.0/
+         │       ├─ .NETCoreApp,Version=v8.0.AssemblyAttributes.cs
+         │       ├─ OpenNCL Lancher.AssemblyInfo.cs
+         │       ├─ OpenNCL Lancher.AssemblyInfoInputs.cache
+         │       ├─ OpenNCL Lancher.GeneratedMSBuildEditorConfig.editorconfig
+         │       ├─ OpenNCL Lancher.assets.cache
+         │       ├─ OpenNCL Lancher.csproj.AssemblyReference.cache
+         │       ├─ ref/
+         │       ├─ refint/
+         │       └─ win-x64/
+         └─ x64/
+             └─ Debug/
+                 └─ net8.0-windows10.0.19041.0/

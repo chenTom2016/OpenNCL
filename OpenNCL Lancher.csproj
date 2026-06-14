@@ -7,7 +7,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Platforms>x86;x64;ARM64</Platforms>
     <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
-    <PublishProfile>win-$(Platform).pubxml</PublishProfile>
+    <PublishProfile Condition="'$(Platform)'!='AnyCPU'">win-$(Platform).pubxml</PublishProfile>
     <UseWinUI>true</UseWinUI>
     <WinUISDKReferences>false</WinUISDKReferences>
     <EnableMsixTooling>true</EnableMsixTooling>
@@ -27,10 +27,11 @@
 
   <ItemGroup>
     <Content Include="config\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="config\" />
-    <Content Include="python\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="python\" />
-    <Content Include="kernel\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="kernel\" />
-    <Content Include="server\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="server\" />
-    <Content Include="cli\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="cli\" />
+    <Content Include="python\**\*" Exclude="python\**\__pycache__\**" CopyToOutputDirectory="PreserveNewest" LinkBase="python\" />
+    <Content Include="kernel\**\*" Exclude="kernel\**\__pycache__\**" CopyToOutputDirectory="PreserveNewest" LinkBase="kernel\" />
+    <Content Include="plugins\**\*" Exclude="plugins\**\__pycache__\**" CopyToOutputDirectory="PreserveNewest" LinkBase="plugins\" />
+    <Content Include="server\**\*" Exclude="server\**\__pycache__\**" CopyToOutputDirectory="PreserveNewest" LinkBase="server\" />
+    <Content Include="cli\**\*" Exclude="cli\**\__pycache__\**" CopyToOutputDirectory="PreserveNewest" LinkBase="cli\" />
     <Content Include="webui\**\*" CopyToOutputDirectory="PreserveNewest" LinkBase="webui\" />
     <Content Include="requirements.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

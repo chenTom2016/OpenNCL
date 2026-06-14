@@ -8,7 +8,47 @@ import json
 class OpenNCLKernel:
     def __init__(self):
         self.history = []
-        self.modules = ["math", "net", "fs", "encrypt", "qrcode", "translate"]
+        self.modules = ["math", "net", "fs", "encrypt", "qrcode", "translate", "ai"]
+        self.plugins = {}        # name -> (run_callable, description)
+        self.plugin_errors = []  # list of "filename: error"
+        self._load_plugins()
+
+    def _load_plugins(self):
+        import importlib.util
+        import glob
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        plugins_dir = os.path.join(root, "plugins")
+        if not os.path.isdir(plugins_dir):
+            return
+        for path in sorted(glob.glob(os.path.join(plugins_dir, "*.py"))):
+            fname = os.path.basename(path)
+            if fname.startswith("__"):
+                continue
+            try:
+                spec = importlib.util.spec_from_file_location(f"openncl_plugin_{fname[:-3]}", path)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                name = getattr(mod, "COMMAND", None)
+                run = getattr(mod, "run", None)
+                if not name or not callable(run):
+                    self.plugin_errors.append(f"{fname}: missing COMMAND or run()")
+                    continue
+                desc = getattr(mod, "DESCRIPTION", "")
+                self.plugins[str(name).strip().lower()] = (run, desc)
+            except Exception as e:
+                self.plugin_errors.append(f"{fname}: {e}")
+
+    def _cmd_plugins(self) -> str:
+        lines = [f"Loaded plugins: {len(self.plugins)}"]
+        for name, (_, desc) in sorted(self.plugins.items()):
+            lines.append(f"  {name}  -  {desc}" if desc else f"  {name}")
+        if self.plugin_errors:
+            lines.append("Errors:")
+            for err in self.plugin_errors:
+                lines.append(f"  [ERROR] {err}")
+        if len(self.plugins) == 0 and not self.plugin_errors:
+            lines.append("  (none) — drop .py files into the plugins/ folder")
+        return "\n".join(lines)
 
     def exec(self, cmd: str) -> str:
         self.history.append(cmd)
@@ -17,6 +57,7 @@ class OpenNCLKernel:
         if cmd_lower == "about": return self._cmd_about()
         if cmd_lower == "help": return self._cmd_help()
         if cmd_lower == "modules": return self._cmd_modules()
+        if cmd_lower == "plugins": return self._cmd_plugins()
         if cmd_lower in ("date", "time"): return self._cmd_date()
         if cmd_lower == "ip": return self._cmd_ip()
         if cmd_lower == "pwd": return self._cmd_pwd()
@@ -95,10 +136,38 @@ class OpenNCLKernel:
         if cmd_lower.startswith("translate"):
             return self._cmd_translate(cmd)
 
+        # AI
+        if cmd_lower.startswith("ai "):
+            return self._cmd_ai(cmd[3:].strip())
+        if cmd_lower.startswith("ask "):
+            return self._cmd_ai(cmd[4:].strip())
+        if cmd_lower == "config ai show":
+            return self._cmd_config_ai_show()
+        if cmd_lower.startswith("config ai model "):
+            return self._cmd_config_ai_set("model", cmd[17:].strip())
+        if cmd_lower.startswith("config ai api "):
+            return self._cmd_config_ai_set("api", cmd[14:].strip())
+        if cmd_lower.startswith("config ai key "):
+            return self._cmd_config_ai_set("key", cmd[15:].strip())
+        if cmd_lower.startswith("config ai provider "):
+            return self._cmd_config_ai_set("provider", cmd[20:].strip())
+
         # URL detection
         if _re.match(r'^https?://', cmd_lower):
             self._cmd_open(cmd_lower)
             return f"Opened: {cmd_lower}"
+
+        # Plugins (user-extensible commands from plugins/ folder)
+        parts = cmd.strip().split(None, 1)
+        if parts:
+            pname = parts[0].lower()
+            if pname in self.plugins:
+                run, _ = self.plugins[pname]
+                pargs = parts[1] if len(parts) > 1 else ""
+                try:
+                    return str(run(pargs))
+                except Exception as e:
+                    return f"[ERROR] Plugin '{pname}' failed: {e}"
 
         return f"Unknown command: {cmd}\nType 'help' to see available commands.\nDid you mean '{self._suggest(cmd_lower)}'?" if self._suggest(cmd_lower) else f"Unknown command: {cmd}\nType 'help' to see available commands."
 
@@ -114,7 +183,8 @@ class OpenNCLKernel:
                 "google","bing","youtube","open","ip","encrypt","decrypt","install",
                 "cmd","powershell","explorer","notepad","control","taskmgr","mspaint","regedit",
                 "mode pro","x++","linux","wsl","sandbox","logo","bridge start","edit","translate",
-                "calculator","screenshot","qrcode","kill"]
+                "calculator","screenshot","qrcode","kill","ai","ask","config ai","config ai model",
+                "config ai api","config ai key","config ai provider","config ai show"]
         best, best_d = None, 99
         for c in cmds:
             d = self._lev(inp, c.lower())
@@ -224,6 +294,15 @@ class OpenNCLKernel:
             "    edit <file>         Open editor\n"
             "    translate <s> <t> <text>  Translate text\n"
             "    qrcode <text>       Generate QR code\n"
+            "\n"
+            "  AI (OpenAI-compatible):\n"
+            "    ai <prompt>         Ask AI\n"
+            "    ask <prompt>        Same as ai\n"
+            "    config ai show      Show AI config\n"
+            "    config ai model <m> Set model\n"
+            "    config ai api <url> Set API endpoint\n"
+            "    config ai key <k>   Set API key\n"
+            "    config ai provider <p> Set provider\n"
             "\n"
             "------------------------------------------------------"
         )
@@ -596,3 +675,107 @@ class OpenNCLKernel:
             return out if out else f"Killed: {name}"
         except Exception as e:
             return f"[ERROR] {e}"
+
+    # ==================== AI MODULE ====================
+    def _get_ai_config(self):
+        cfg = {"provider": "openai", "model": "gpt-4o",
+               "api_url": "https://api.openai.com/v1/chat/completions", "api_key": ""}
+        try:
+            cfg_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                    "config", "brand.json")
+            if os.path.exists(cfg_path):
+                with open(cfg_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                cfg.update(data.get("ai", {}))
+        except Exception:
+            pass
+        return cfg
+
+    def _save_ai_config(self, cfg):
+        try:
+            cfg_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                    "config", "brand.json")
+            data = {}
+            if os.path.exists(cfg_path):
+                with open(cfg_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            data["ai"] = cfg
+            os.makedirs(os.path.dirname(cfg_path), exist_ok=True)
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            return True
+        except Exception:
+            return False
+
+    def _cmd_ai(self, prompt):
+        if not prompt:
+            return ("Usage: ai <prompt>\n\n"
+                    "Configure AI:\n"
+                    "  config ai model <name>\n"
+                    "  config ai api <url>\n"
+                    "  config ai key <key>\n"
+                    "  config ai provider <name>\n"
+                    "  config ai show")
+
+        cfg = self._get_ai_config()
+        if not cfg.get("api_key"):
+            return ("[ERROR] AI API key not set.\n"
+                    "Use: config ai key <your-api-key>\n\n"
+                    "Supports any OpenAI-compatible API:\n"
+                    "  OpenAI, Anthropic (via proxy), Ollama, vLLM, local LLMs, etc.\n"
+                    "Default endpoint: https://api.openai.com/v1/chat/completions")
+
+        try:
+            body = json.dumps({
+                "model": cfg["model"],
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 4096
+            }).encode("utf-8")
+
+            req = urllib.request.Request(cfg["api_url"], data=body, method="POST")
+            req.add_header("Content-Type", "application/json")
+            req.add_header("Authorization", f"Bearer {cfg['api_key']}")
+
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+
+            choices = data.get("choices", [])
+            if not choices:
+                return "[ERROR] No response from AI model."
+
+            message = choices[0].get("message", {}).get("content", "")
+            model_used = data.get("model", cfg["model"])
+
+            return f"[{model_used}]\n{message}"
+
+        except Exception as e:
+            error_msg = str(e)
+            if "timed out" in error_msg.lower() or "timeout" in error_msg.lower():
+                return "[ERROR] AI request timed out (120s). Try a shorter prompt or check your network/API endpoint."
+            return f"[ERROR] AI request failed: {error_msg}"
+
+    def _cmd_config_ai_show(self):
+        cfg = self._get_ai_config()
+        key = cfg.get("api_key", "")
+        masked = key[:4] + "****" + key[-4:] if len(key) > 8 else ("****" if key else "(not set)")
+        return (f"AI Configuration\n"
+                f"  Provider : {cfg.get('provider', 'openai')}\n"
+                f"  Model    : {cfg.get('model', 'gpt-4o')}\n"
+                f"  API URL  : {cfg.get('api_url', 'https://api.openai.com/v1/chat/completions')}\n"
+                f"  API Key  : {masked}")
+
+    def _cmd_config_ai_set(self, key, value):
+        if not value:
+            return f"[ERROR] Usage: config ai {key} <value>"
+        cfg = self._get_ai_config()
+        key_map = {
+            "model": "model",
+            "api": "api_url",
+            "key": "api_key",
+            "provider": "provider"
+        }
+        mapped = key_map.get(key, key)
+        cfg[mapped] = value
+        if self._save_ai_config(cfg):
+            return f"AI {key} updated."
+        return f"[ERROR] Failed to save AI config."

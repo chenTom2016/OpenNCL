@@ -147,10 +147,11 @@
 <script>
 // ============ KERNEL v4.0 ============
 const kernel = {
-  history:[], modules:['math','net','fs','encrypt','qrcode','translate'], mode:'normal',
+  history:[], modules:['math','net','fs','encrypt','qrcode','translate','ai'], mode:'normal',
   theme: { fg: '#b8b8c0', accent: '#00e5a0', err: '#ff6b6b', dim: 'rgba(255,255,255,0.15)' },
   promptStr: 'openncl> ',
   proPromptStr: 'root@Command:~# ',
+  aiCfg: { provider:'openai', model:'gpt-4o', api_url:'https://api.openai.com/v1/chat/completions', api_key:'' },
 
   exec(cmd){
     this.history.push(cmd);
@@ -202,6 +203,15 @@ const kernel = {
     if(c.startsWith('translate ')) return this._translate(raw);
     if(c.startsWith('kill ')) return 'kill: '+raw.slice(5)+'\n(requires native OpenNCL for process control)';
 
+    // AI commands
+    if(c.startsWith('ai ')) return this._ai(raw.slice(3).trim());
+    if(c.startsWith('ask ')) return this._ai(raw.slice(4).trim());
+    if(c.startsWith('config ai show')) return this._aiCfgShow();
+    if(c.startsWith('config ai model ')) return this._aiCfgSet('model', raw.slice(17).trim());
+    if(c.startsWith('config ai api ')) return this._aiCfgSet('api', raw.slice(14).trim());
+    if(c.startsWith('config ai key ')) return this._aiCfgSet('key', raw.slice(15).trim());
+    if(c.startsWith('config ai provider ')) return this._aiCfgSet('provider', raw.slice(20).trim());
+
     // System shortcuts
     if(['cmd','powershell','explorer','notepad','control','taskmgr','calc.exe','mspaint','calculator','screenshot'].includes(c))
       return 'System: '+c+' (available in native OpenNCL)';
@@ -230,6 +240,10 @@ const kernel = {
       '',
       '  mode pro      X++           logo show <img>',
       '  sandbox/logo/bridge/edit (Python backend)',
+      '',
+      '  AI (OpenAI-compatible):',
+      '  ai/ask <prompt>   config ai show   config ai model <m>',
+      '  config ai api <url>   config ai key <k>   config ai provider <p>',
       '',
       '─'.repeat(52),
     ].join('\n');
@@ -356,7 +370,47 @@ const kernel = {
     const parts=raw.split(/\s+/).slice(1);
     if(parts.length<3) return 'Usage: translate <from> <to> <text>\nExample: translate en zh Hello world';
     const src=parts[0], tgt=parts[1], text=parts.slice(2).join(' ');
-    return '['+src+'→'+tgt+']: '+text+'\n(Auto-translation requires googletrans Python module)';
+    return '['+src+'\u2192'+tgt+']: '+text+'\n(Auto-translation requires googletrans Python module)';
+  },
+
+  // -------- AI Module --------
+  _loadAiCfg(){
+    try{ const s=localStorage.getItem('openncl_ai'); if(s) this.aiCfg={...this.aiCfg,...JSON.parse(s)}; }
+    catch(e){}
+  },
+  _saveAiCfg(){
+    try{ localStorage.setItem('openncl_ai', JSON.stringify(this.aiCfg)); }
+    catch(e){}
+  },
+  _aiCfgShow(){
+    const k=this.aiCfg.api_key;
+    const masked=k.length>8?k.slice(0,4)+'****'+k.slice(-4):(k?'****':'(not set)');
+    return 'AI Configuration\n  Provider : '+this.aiCfg.provider+'\n  Model    : '+this.aiCfg.model+'\n  API URL  : '+this.aiCfg.api_url+'\n  API Key  : '+masked;
+  },
+  _aiCfgSet(key, val){
+    if(!val.trim()) return '[ERROR] Usage: config ai '+key+' <value>';
+    const map={model:'model',api:'api_url',key:'api_key',provider:'provider'};
+    this.aiCfg[map[key]||key]=val;
+    this._saveAiCfg();
+    return 'AI '+key+' updated.';
+  },
+  async _ai(prompt){
+    if(!prompt) return 'Usage: ai <prompt>\n\nConfigure: config ai model <name> | config ai api <url> | config ai key <key> | config ai show';
+    if(!this.aiCfg.api_key) return '[ERROR] AI API key not set.\nUse: config ai key <your-api-key>\n\nSupports any OpenAI-compatible API (OpenAI, Ollama, vLLM, etc.)';
+    try{
+      const resp=await fetch(this.aiCfg.api_url, {
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+this.aiCfg.api_key},
+        body:JSON.stringify({model:this.aiCfg.model, messages:[{role:'user',content:prompt}], max_tokens:4096})
+      });
+      const data=await resp.json();
+      if(!resp.ok) return '[ERROR] API error ('+resp.status+'):\n'+(data.error?.message||JSON.stringify(data).slice(0,400));
+      const msg=data.choices?.[0]?.message?.content||'';
+      const model=data.model||this.aiCfg.model;
+      return '['+model+']\n'+msg;
+    }catch(e){
+      return '[ERROR] AI request failed: '+e.message;
+    }
   },
 };
 
@@ -367,7 +421,7 @@ const $term=document.getElementById('terminal');
 const $modeInd=document.getElementById('mode-indicator');
 const $statTxt=document.getElementById('status-text');
 const $cmdCnt=document.getElementById('cmd-count');
-let cmdCount=0;
+let cmdCount=0, aiBusy=false;
 
 function updateModeUI(){
   $modeInd.textContent = kernel.mode;
@@ -416,10 +470,41 @@ function onInputKey(e){
     el.contentEditable='false'; el.style.color=kernel.theme.accent; el.style.textShadow='0 0 4px rgba(0,229,160,0.2)';
     currentInputLine=null;
 
+    if(aiBusy){ createInputLine(); return; }
+
     hist.push(cmd); histIdx=-1; cmdCount++; $cmdCnt.textContent=cmdCount+' cmd';
     if(!cmd){ createInputLine(); return; }
 
     const out=kernel.exec(cmd);
+
+    // Handle async (AI) commands
+    if(out instanceof Promise){
+      aiBusy=true;
+      const thinkingEl=document.createElement('div');
+      thinkingEl.className='line dim';
+      thinkingEl.textContent='  \u23f3 Thinking...';
+      $term.appendChild(thinkingEl);
+      $term.scrollTop=$term.scrollHeight;
+
+      out.then(result=>{
+        if(thinkingEl.parentNode) thinkingEl.remove();
+        result.split('\n').forEach(line=>{
+          let cls='result';
+          if(line.startsWith('Error')||line.startsWith('[ERROR]')) cls='error';
+          else if(line.startsWith('[')) cls='kernel';
+          append(line,cls);
+        });
+        aiBusy=false;
+        createInputLine();
+      }).catch(e=>{
+        if(thinkingEl.parentNode) thinkingEl.remove();
+        append('[ERROR] '+e.message,'error');
+        aiBusy=false;
+        createInputLine();
+      });
+      return;
+    }
+
     if(out==='__CLEAR__'){ $term.innerHTML=''; cmdCount=0; $cmdCnt.textContent='0 cmd'; createInputLine(); return; }
     if(out==='__EXIT__'){
       if(kernel.mode==='pro'){
@@ -456,6 +541,7 @@ function placeCaretEnd(el){const r=document.createRange(),s=window.getSelection(
 function focusInput(){if(currentInputLine) currentInputLine.focus();}
 
 function boot(){
+  kernel._loadAiCfg();
   const logo=[
     '          ██████╗ ██████╗ ███████╗███╗   ██╗███╗   ██╗ ██████╗██╗     ',
     '         ██╔═══██╗██╔══██╗██╔════╗████╗  ██║████╗  ██║██╔════╗██║     ',

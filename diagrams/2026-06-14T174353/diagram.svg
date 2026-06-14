@@ -1,0 +1,327 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 850" width="1100" height="850">
+  <defs>
+    <style>
+      text { font-family: 'Noto Sans SC', 'Segoe UI', sans-serif; }
+      .title { font-size: 22px; font-weight: bold; fill: #f1f5f9; }
+      .subtitle { font-size: 13px; fill: #6b7280; }
+      .layer-label { font-size: 11px; font-weight: bold; fill: #9ca3af; letter-spacing: 1.5px; }
+      .node-title { font-size: 12px; font-weight: bold; fill: #ffffff; }
+      .node-desc { font-size: 9px; fill: rgba(255,255,255,0.75); }
+      .flow-label { font-size: 8px; fill: #6b7280; }
+      .badge { font-size: 8px; font-weight: bold; fill: #ffffff; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1100" height="850" rx="16" fill="#0f0f1a"/>
+
+  <!-- Decor: grid dots -->
+  <g opacity="0.04">
+    <circle cx="20" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="60" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="100" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="140" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="180" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="220" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="260" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="300" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="340" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="380" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="420" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="460" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="500" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="540" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="580" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="620" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="660" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="700" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="740" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="780" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="820" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="860" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="900" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="940" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="980" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="1020" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="1060" cy="20" r="1" fill="#ffffff"/>
+    <circle cx="20" cy="60" r="1" fill="#ffffff"/>
+    <circle cx="60" cy="60" r="1" fill="#ffffff"/>
+    <circle cx="100" cy="60" r="1" fill="#ffffff"/>
+    <circle cx="140" cy="60" r="1" fill="#ffffff"/>
+    <circle cx="180" cy="60" r="1" fill="#ffffff"/>
+    <circle cx="220" cy="60" r="1" fill="#ffffff"/>
+    <circle cx="540" cy="60" r="1" fill="#ffffff"/>
+    <circle cx="580" cy="60" r="1" fill="#ffffff"/>
+    <circle cx="620" cy="60" r="1" fill="#ffffff"/>
+    <circle cx="1060" cy="60" r="1" fill="#ffffff"/>
+    <circle cx="20" cy="100" r="1" fill="#ffffff"/>
+    <circle cx="60" cy="100" r="1" fill="#ffffff"/>
+    <circle cx="540" cy="100" r="1" fill="#ffffff"/>
+    <circle cx="1060" cy="100" r="1" fill="#ffffff"/>
+    <circle cx="20" cy="140" r="1" fill="#ffffff"/>
+    <circle cx="1060" cy="140" r="1" fill="#ffffff"/>
+    <circle cx="20" cy="180" r="1" fill="#ffffff"/>
+    <circle cx="1060" cy="180" r="1" fill="#ffffff"/>
+  </g>
+
+  <!-- Header -->
+  <text x="30" y="42" class="title">OpenNCL v4.0 Architecture</text>
+  <text x="30" y="64" class="subtitle">WinUI 3 (C#) + Python Kernel Hybrid Terminal Launcher</text>
+  <line x1="30" y1="74" x2="290" y2="74" stroke="#6366f1" stroke-width="2" opacity="0.6"/>
+
+  <!-- ===== LAYER 1: PRESENTATION ===== -->
+  <g id="layer1">
+    <rect x="30" y="98" width="1040" height="82" rx="10" fill="#1e1b4b" opacity="0.3"/>
+    <text x="44" y="118" class="layer-label">Presentation — C# WinUI 3</text>
+
+    <!-- App Entry -->
+    <rect x="44" y="130" width="150" height="40" rx="6" fill="#6366f1"/>
+    <text x="119" y="152" class="node-title" text-anchor="middle">App.xaml.cs</text>
+    <text x="119" y="164" class="node-desc" text-anchor="middle">Entry Point</text>
+    <rect x="49" y="127" width="24" height="14" rx="3" fill="#818cf8"/>
+    <text x="61" y="137" class="badge" text-anchor="middle">C#</text>
+
+    <!-- MainWindow -->
+    <rect x="224" y="130" width="185" height="40" rx="6" fill="#4f46e5"/>
+    <text x="316" y="152" class="node-title" text-anchor="middle">MainWindow.xaml.cs</text>
+    <text x="316" y="164" class="node-desc" text-anchor="middle">Terminal UI ~390 lines</text>
+    <rect x="229" y="127" width="24" height="14" rx="3" fill="#818cf8"/>
+    <text x="241" y="137" class="badge" text-anchor="middle">C#</text>
+
+    <!-- AiSidebar -->
+    <rect x="439" y="130" width="165" height="40" rx="6" fill="#4f46e5"/>
+    <text x="521" y="152" class="node-title" text-anchor="middle">AiSidebar.xaml.cs</text>
+    <text x="521" y="164" class="node-desc" text-anchor="middle">WebView2 AI Panel</text>
+    <rect x="444" y="127" width="24" height="14" rx="3" fill="#818cf8"/>
+    <text x="456" y="137" class="badge" text-anchor="middle">C#</text>
+
+    <!-- DebugWindow -->
+    <rect x="634" y="134" width="130" height="32" rx="6" fill="#3730a3"/>
+    <text x="699" y="154" class="node-title" text-anchor="middle">DebugWindow</text>
+
+    <!-- Command Palette -->
+    <rect x="794" y="134" width="140" height="32" rx="6" fill="#3730a3"/>
+    <text x="864" y="150" class="node-title" text-anchor="middle">Command Palette</text>
+    <text x="864" y="162" class="node-desc" text-anchor="middle">Ctrl+Shift+P</text>
+
+    <!-- Arrows within Layer 1 -->
+    <polyline points="194,150 218,150" stroke="#818cf8" stroke-width="1.5" fill="none"/>
+    <polygon points="218,146 224,150 218,154" fill="#818cf8"/>
+    <polyline points="409,150 433,150" stroke="#818cf8" stroke-width="1.5" fill="none"/>
+    <polygon points="433,146 439,150 433,154" fill="#818cf8"/>
+  </g>
+
+  <!-- ===== LAYER 2: RUNTIME BRIDGE ===== -->
+  <g id="layer2">
+    <rect x="30" y="200" width="1040" height="82" rx="10" fill="#042f2e" opacity="0.3"/>
+    <text x="44" y="220" class="layer-label">Runtime Bridge — C#</text>
+
+    <rect x="44" y="232" width="168" height="42" rx="6" fill="#0891b2"/>
+    <text x="128" y="252" class="node-title" text-anchor="middle">PythonLauncher.cs</text>
+    <text x="128" y="266" class="node-desc" text-anchor="middle">Process Mgmt, Async I/O</text>
+    <rect x="49" y="229" width="24" height="14" rx="3" fill="#22d3ee"/>
+    <text x="61" y="239" class="badge" text-anchor="middle">C#</text>
+
+    <rect x="242" y="232" width="168" height="42" rx="6" fill="#0891b2"/>
+    <text x="326" y="252" class="node-title" text-anchor="middle">OpenNclNative.cs</text>
+    <text x="326" y="266" class="node-desc" text-anchor="middle">Native Kernel Bridge</text>
+    <rect x="247" y="229" width="24" height="14" rx="3" fill="#22d3ee"/>
+    <text x="259" y="239" class="badge" text-anchor="middle">C#</text>
+
+    <rect x="440" y="236" width="140" height="34" rx="6" fill="#0e7490"/>
+    <text x="510" y="258" class="node-title" text-anchor="middle">BackendDebugHub</text>
+
+    <rect x="610" y="236" width="130" height="34" rx="6" fill="#0e7490"/>
+    <text x="675" y="258" class="node-title" text-anchor="middle">AgentLoop.cs</text>
+  </g>
+
+  <!-- Connection from Layer 1 to Layer 2 -->
+  <polyline points="316,170 316,195 128,195 128,226" stroke="#22d3ee" stroke-width="1.5" fill="none"/>
+  <polygon points="124,226 128,232 132,226" fill="#22d3ee"/>
+  <polyline points="521,170 521,210 675,210 675,230" stroke="#0e7490" stroke-width="1" fill="none" stroke-dasharray="3,3"/>
+  <polyline points="699,166 699,218 510,218 510,230" stroke="#0e7490" stroke-width="1" fill="none" stroke-dasharray="3,3"/>
+
+  <!-- ===== LAYER 3: PYTHON BACKEND ===== -->
+  <g id="layer3">
+    <rect x="30" y="304" width="1040" height="90" rx="10" fill="#1c1917" opacity="0.3"/>
+    <text x="44" y="324" class="layer-label">Python Backend</text>
+
+    <!-- launcher.py -->
+    <rect x="44" y="336" width="168" height="50" rx="6" fill="#d97706"/>
+    <text x="128" y="356" class="node-title" text-anchor="middle">launcher.py</text>
+    <text x="128" y="374" class="node-desc" text-anchor="middle">stdin/stdout Protocol Bridge</text>
+    <rect x="49" y="333" width="24" height="14" rx="3" fill="#fbbf24"/>
+    <text x="61" y="343" class="badge" text-anchor="middle">Py</text>
+
+    <!-- Kernel -->
+    <rect x="242" y="336" width="195" height="50" rx="6" fill="#d97706"/>
+    <text x="339" y="356" class="node-title" text-anchor="middle">openncl_kernel.py</text>
+    <text x="339" y="374" class="node-desc" text-anchor="middle">~42 cmds, fuzzy suggest, plugins</text>
+    <rect x="247" y="333" width="24" height="14" rx="3" fill="#fbbf24"/>
+    <text x="259" y="343" class="badge" text-anchor="middle">Py</text>
+
+    <!-- Flask Server -->
+    <rect x="467" y="336" width="175" height="50" rx="6" fill="#d97706"/>
+    <text x="554" y="356" class="node-title" text-anchor="middle">openncl_server.py</text>
+    <text x="554" y="374" class="node-desc" text-anchor="middle">Flask WebUI :7878</text>
+    <rect x="472" y="333" width="24" height="14" rx="3" fill="#fbbf24"/>
+    <text x="484" y="343" class="badge" text-anchor="middle">Py</text>
+
+    <!-- Plugins -->
+    <rect x="672" y="340" width="120" height="42" rx="6" fill="#92400e"/>
+    <text x="732" y="358" class="node-title" text-anchor="middle">plugins/</text>
+    <text x="732" y="374" class="node-desc" text-anchor="middle">Hot-pluggable .py</text>
+
+    <!-- CLI -->
+    <rect x="822" y="344" width="126" height="34" rx="6" fill="#92400e"/>
+    <text x="885" y="366" class="node-title" text-anchor="middle">openncl_cli.py</text>
+  </g>
+
+  <!-- C# to Python bridge - main flow line -->
+  <polyline points="128,274 128,300 339,300 339,330" stroke="#f59e0b" stroke-width="2" fill="none"/>
+  <polygon points="335,330 339,336 343,330" fill="#f59e0b"/>
+  <text x="230" y="296" class="flow-label" text-anchor="middle" fill="#f59e0b">stdin/stdout + __READY__ handshake</text>
+
+  <!-- Kernel to Plugins -->
+  <polyline points="437,361 500,361 500,350 666,350 666,361" stroke="#fbbf24" stroke-width="1" fill="none" stroke-dasharray="4,2"/>
+  <!-- Kernel to Flask -->
+  <polyline points="437,361 461,361" stroke="#fbbf24" stroke-width="1.5" fill="none"/>
+  <polygon points="461,357 467,361 461,365" fill="#fbbf24"/>
+
+  <!-- ===== LAYER 4: WEB UI ===== -->
+  <g id="layer4">
+    <rect x="30" y="416" width="1040" height="82" rx="10" fill="#1c1129" opacity="0.3"/>
+    <text x="44" y="436" class="layer-label">Web UI</text>
+
+    <rect x="44" y="448" width="210" height="42" rx="6" fill="#7c3aed"/>
+    <text x="149" y="468" class="node-title" text-anchor="middle">ai-sidebar.html</text>
+    <text x="149" y="482" class="node-desc" text-anchor="middle">SSE AI Chat ~280 lines</text>
+    <rect x="49" y="445" width="32" height="14" rx="3" fill="#a78bfa"/>
+    <text x="65" y="455" class="badge" text-anchor="middle">HTML</text>
+
+    <rect x="284" y="448" width="220" height="42" rx="6" fill="#7c3aed"/>
+    <text x="394" y="468" class="node-title" text-anchor="middle">standalone.html</text>
+    <text x="394" y="482" class="node-desc" text-anchor="middle">Zero-backend Terminal 30+ cmds</text>
+    <rect x="289" y="445" width="32" height="14" rx="3" fill="#a78bfa"/>
+    <text x="305" y="455" class="badge" text-anchor="middle">HTML</text>
+  </g>
+
+  <!-- AI Sidebar bound to WebView2 -->
+  <polyline points="521,170 521,430 149,430 149,442" stroke="#a78bfa" stroke-width="1.5" fill="none"/>
+  <polygon points="145,442 149,448 153,442" fill="#a78bfa"/>
+  <text x="340" y="426" class="flow-label" text-anchor="middle" fill="#a78bfa">ExecuteScriptAsync / postMessage</text>
+
+  <!-- Flask to standalone -->
+  <polyline points="554,386 554,416 394,416 394,442" stroke="#a78bfa" stroke-width="1" fill="none" stroke-dasharray="3,3"/>
+  <text x="480" y="412" class="flow-label" text-anchor="middle" fill="#a78bfa">serves</text>
+
+  <!-- ===== LAYER 5: CONFIG & EXTERNAL ===== -->
+  <g id="layer5">
+    <rect x="30" y="522" width="1040" height="70" rx="10" fill="#1c1c1e" opacity="0.3"/>
+    <text x="44" y="542" class="layer-label">Config &amp; Data</text>
+
+    <rect x="44" y="550" width="155" height="34" rx="6" fill="#374151"/>
+    <text x="121" y="572" class="node-title" text-anchor="middle">brand.json</text>
+
+    <rect x="225" y="550" width="155" height="34" rx="6" fill="#374151"/>
+    <text x="302" y="572" class="node-title" text-anchor="middle">config.json</text>
+
+    <rect x="406" y="550" width="155" height="34" rx="6" fill="#374151"/>
+    <text x="483" y="572" class="node-title" text-anchor="middle">requirements.txt</text>
+  </g>
+
+  <!-- ===== EXTERNAL SERVICE ===== -->
+  <g id="external">
+    <rect x="600" y="550" width="130" height="34" rx="6" fill="#334155" stroke="#475569" stroke-width="1"/>
+    <text x="665" y="568" class="node-title" text-anchor="middle">es.exe</text>
+    <text x="665" y="580" class="node-desc" text-anchor="middle">Everything Search</text>
+  </g>
+
+  <!-- Connections to config -->
+  <polyline points="339,386 339,530 121,530 121,544" stroke="#9ca3af" stroke-width="1" fill="none" stroke-dasharray="3,3"/>
+  <polyline points="554,386 554,530 483,530 483,544" stroke="#9ca3af" stroke-width="1" fill="none" stroke-dasharray="3,3"/>
+
+  <!-- ===== COMMUNICATION LEGEND ===== -->
+  <g transform="translate(780, 450)">
+    <line x1="0" y1="0" x2="42" y2="0" stroke="#f59e0b" stroke-width="2"/>
+    <polygon points="40,-4 46,0 40,4" fill="#f59e0b"/>
+    <text x="56" y="4" style="font-size: 10px; fill: #9ca3af;">stdin/stdout (__READY__)</text>
+
+    <line x1="0" y1="22" x2="42" y2="22" stroke="#a78bfa" stroke-width="1.5"/>
+    <polygon points="40,18 46,22 40,26" fill="#a78bfa"/>
+    <text x="56" y="26" style="font-size: 10px; fill: #9ca3af;">ExecuteScriptAsync bridge</text>
+
+    <line x1="0" y1="44" x2="42" y2="44" stroke="#fbbf24" stroke-width="1" stroke-dasharray="4,2"/>
+    <text x="56" y="48" style="font-size: 10px; fill: #9ca3af;">HTTP REST :7878</text>
+
+    <line x1="0" y1="66" x2="42" y2="66" stroke="#818cf8" stroke-width="1.5"/>
+    <polygon points="40,62 46,66 40,70" fill="#818cf8"/>
+    <text x="56" y="70" style="font-size: 10px; fill: #9ca3af;">Internal C# Call</text>
+  </g>
+
+  <!-- ===== TECH STACK BAR ===== -->
+  <g transform="translate(44, 620)">
+    <text x="0" y="0" style="font-size: 11px; font-weight: bold; fill: #9ca3af; letter-spacing: 1.5px;">TECH STACK</text>
+
+    <rect x="0" y="10" width="72" height="24" rx="12" fill="#512bd420" stroke="#512bd4" stroke-width="1"/>
+    <text x="36" y="26" style="font-size: 10px; fill: #a78bfa; text-anchor: middle;">.NET 10</text>
+
+    <rect x="80" y="10" width="72" height="24" rx="12" fill="#2563eb20" stroke="#2563eb" stroke-width="1"/>
+    <text x="116" y="26" style="font-size: 10px; fill: #60a5fa; text-anchor: middle;">WinUI 3</text>
+
+    <rect x="160" y="10" width="84" height="24" rx="12" fill="#3776ab20" stroke="#3776ab" stroke-width="1"/>
+    <text x="202" y="26" style="font-size: 10px; fill: #fbbf24; text-anchor: middle;">Python 3.11</text>
+
+    <rect x="252" y="10" width="108" height="24" rx="12" fill="#2563eb20" stroke="#2563eb" stroke-width="1"/>
+    <text x="306" y="26" style="font-size: 10px; fill: #60a5fa; text-anchor: middle;">WinAppSDK 1.8</text>
+
+    <rect x="368" y="10" width="82" height="24" rx="12" fill="#7c3aed20" stroke="#7c3aed" stroke-width="1"/>
+    <text x="409" y="26" style="font-size: 10px; fill: #a78bfa; text-anchor: middle;">WebView2</text>
+
+    <rect x="458" y="10" width="58" height="24" rx="12" fill="#f59e0b20" stroke="#f59e0b" stroke-width="1"/>
+    <text x="487" y="26" style="font-size: 10px; fill: #fbbf24; text-anchor: middle;">Flask</text>
+
+    <rect x="524" y="10" width="82" height="24" rx="12" fill="#47556930" stroke="#475569" stroke-width="1"/>
+    <text x="565" y="26" style="font-size: 10px; fill: #9ca3af; text-anchor: middle;">Everything</text>
+  </g>
+
+  <!-- ===== PROJECT STATS ===== -->
+  <g transform="translate(44, 680)">
+    <text x="0" y="0" style="font-size: 11px; font-weight: bold; fill: #9ca3af; letter-spacing: 1.5px;">PROJECT STATS</text>
+
+    <rect x="0" y="12" width="150" height="30" rx="6" fill="#6366f110"/>
+    <text x="12" y="26" style="font-size: 9px; fill: #9ca3af;">Total Lines</text>
+    <text x="12" y="40" style="font-size: 14px; font-weight: bold; fill: #c7d2fe;">~3,500</text>
+
+    <rect x="162" y="12" width="150" height="30" rx="6" fill="#0891b210"/>
+    <text x="174" y="26" style="font-size: 9px; fill: #9ca3af;">Source Files</text>
+    <text x="174" y="40" style="font-size: 14px; font-weight: bold; fill: #67e8f9;">30+</text>
+
+    <rect x="324" y="12" width="150" height="30" rx="6" fill="#f59e0b10"/>
+    <text x="336" y="26" style="font-size: 9px; fill: #9ca3af;">Commands</text>
+    <text x="336" y="40" style="font-size: 14px; font-weight: bold; fill: #fcd34d;">50+</text>
+
+    <rect x="486" y="12" width="150" height="30" rx="6" fill="#7c3aed10"/>
+    <text x="498" y="26" style="font-size: 9px; fill: #9ca3af;">Run Modes</text>
+    <text x="498" y="40" style="font-size: 14px; font-weight: bold; fill: #c4b5fd;">4</text>
+  </g>
+
+  <!-- Runner mode pills -->
+  <g transform="translate(44, 750)">
+    <rect x="0" y="0" width="108" height="22" rx="4" fill="#6366f120" stroke="#6366f1" stroke-width="0.5"/>
+    <text x="54" y="15" style="font-size: 8px; fill: #818cf8; text-anchor: middle;">Desktop (WinUI 3)</text>
+
+    <rect x="116" y="0" width="70" height="22" rx="4" fill="#7c3aed20" stroke="#7c3aed" stroke-width="0.5"/>
+    <text x="151" y="15" style="font-size: 8px; fill: #a78bfa; text-anchor: middle;">WebUI :7878</text>
+
+    <rect x="194" y="0" width="64" height="22" rx="4" fill="#f59e0b20" stroke="#f59e0b" stroke-width="0.5"/>
+    <text x="226" y="15" style="font-size: 8px; fill: #fbbf24; text-anchor: middle;">CLI Mode</text>
+
+    <rect x="266" y="0" width="96" height="22" rx="4" fill="#10b98120" stroke="#10b981" stroke-width="0.5"/>
+    <text x="314" y="15" style="font-size: 8px; fill: #34d399; text-anchor: middle;">Standalone HTML</text>
+  </g>
+
+  <!-- Footer -->
+  <text x="550" y="838" class="subtitle" text-anchor="middle" fill="#4b5563">OpenNCL v4.0 · MIT License · Tom (chenTom2016) · github.com/chenTom2016/OpenNCL</text>
+</svg>

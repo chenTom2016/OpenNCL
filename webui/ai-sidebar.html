@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenNCL AI</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; overflow:hidden; }
+
+body {
+  font-family: 'Cascadia Code', 'Consolas', 'SF Mono', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #D0D0D8;
+  background: #0D0D12;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+}
+
+/* ===== HEADER ===== */
+#header {
+  height: 40px;
+  background: #0F0F18;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  flex-shrink: 0;
+  gap: 6px;
+}
+#header .title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #E0E0E0;
+}
+#header .model-badge {
+  font-size: 10px;
+  color: #8888AA;
+  background: #1A1A2E;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+#header .spacer { flex:1; }
+
+/* Agent toggle */
+.agent-toggle {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 10px; color: #666680;
+}
+.agent-toggle input { display:none; }
+.agent-toggle .switch {
+  width: 28px; height: 16px; border-radius: 8px;
+  background: #2A2A3E; cursor: pointer; position: relative; transition: background 0.2s;
+}
+.agent-toggle .switch::after {
+  content:''; position:absolute; top:2px; left:2px;
+  width:12px; height:12px; border-radius:50%; background:#666;
+  transition: transform 0.2s, background 0.2s;
+}
+.agent-toggle input:checked + .switch { background: #00E5A0; }
+.agent-toggle input:checked + .switch::after { transform:translateX(12px); background:#0D0D12; }
+
+#header button {
+  font-family: inherit;
+  font-size: 10px;
+  color: #666680;
+  background: transparent;
+  border: none;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+#header button:hover { color: #AAA; background: rgba(255,255,255,0.05); }
+#header button.danger:hover { color: #FF6B6B; }
+
+/* ===== CHAT ===== */
+#chat {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+}
+#chat::-webkit-scrollbar { width: 4px; }
+#chat::-webkit-scrollbar-track { background: transparent; }
+#chat::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 4px; }
+
+/* Messages */
+.msg-row { margin-bottom: 8px; display: flex; }
+.msg-row.user { justify-content: flex-end; }
+.msg-row.assistant { justify-content: flex-start; flex-direction: column; }
+.msg-row.error { justify-content: center; }
+
+.msg-bubble {
+  max-width: 92%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.msg-bubble p { margin: 4px 0; }
+.msg-row.user .msg-bubble { background: #00E5A0; color: #0D0D12; }
+.msg-row.assistant .msg-bubble { background: #1A1A2E; color: #D0D0D8; }
+.msg-row.error .msg-bubble { background: #3D1218; color: #FF6B6B; font-size: 12px; }
+
+/* Markdown inside assistant bubble */
+.md-content h1,.md-content h2,.md-content h3 {
+  font-size: 1.2em; font-weight: 700; margin: 12px 0 4px; color:#E0E0E0;
+}
+.md-content h1 { font-size:1.35em; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:4px; }
+.md-content h2 { font-size:1.2em; }
+.md-content h3 { font-size:1.08em; }
+.md-content strong { color:#FFF; font-weight:700; }
+.md-content em { font-style:italic; color:#B0B0C0; }
+.md-content del { text-decoration:line-through; opacity:0.6; }
+.md-content a { color:#00E5A0; }
+.md-content blockquote {
+  border-left: 3px solid #00E5A0;
+  padding: 4px 0 4px 12px;
+  margin: 6px 0;
+  color: #8888AA;
+}
+.md-content hr { border:none; border-top:1px solid rgba(255,255,255,0.06); margin:10px 0; }
+.md-content ul,.md-content ol { padding-left:20px; margin:4px 0; }
+.md-content li { margin:2px 0; }
+.md-content code {
+  background: rgba(255,255,255,0.08);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-family: inherit;
+}
+.md-content pre {
+  background: #0A0A14;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 6px;
+  padding: 0;
+  overflow-x: auto;
+  margin: 6px 0;
+  position: relative;
+}
+.md-content pre .code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px;
+  background: rgba(255,255,255,0.03);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 10px;
+}
+.md-content pre .code-header .lang-tag { color: #666680; }
+.md-content pre .code-header .btn-group { display:flex; gap:4px; }
+.md-content pre .code-header button {
+  font-family: inherit; font-size: 10px;
+  background: rgba(255,255,255,0.06);
+  color: #8888AA;
+  border: none;
+  padding: 2px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.md-content pre .code-header button:hover { background: rgba(255,255,255,0.12); color:#D0D0D8; }
+.md-content pre .code-header button.run-btn { color:#00E5A0; }
+.md-content pre .code-header button.run-btn:hover { background: rgba(0,229,160,0.12); }
+.md-content pre code {
+  display:block; padding:8px 12px; background:transparent;
+  white-space:pre; tab-size:4; -moz-tab-size:4;
+}
+.md-content pre code .syn-kw { color:#C792EA; }
+.md-content pre code .syn-str { color:#C3E88D; }
+.md-content pre code .syn-cmt { color:#546E7A; font-style:italic; }
+.md-content pre code .syn-num { color:#F78C6C; }
+.md-content pre code .syn-fn { color:#82AAFF; }
+
+/* Tool call card */
+.tool-card {
+  margin: 6px 0;
+  background: #0F0F1A;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-left: 3px solid #FFB74D;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.tool-card .tool-header {
+  display:flex; align-items:center; gap:6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  background: rgba(255,183,77,0.04);
+}
+.tool-card .tool-header:hover { background: rgba(255,183,77,0.08); }
+.tool-card .tool-header .tool-icon { font-size:14px; }
+.tool-card .tool-header .tool-name { color:#FFB74D; font-weight:600; }
+.tool-card .tool-header .tool-args { color:#8888AA; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tool-card .tool-header .tool-arrow { color:#666680; font-size:10px; margin-left:auto; transition:transform 0.2s; }
+.tool-card.open .tool-header .tool-arrow { transform:rotate(90deg); }
+.tool-card .tool-body { display:none; padding:8px 10px; font-size:12px; border-top:1px solid rgba(255,255,255,0.04); }
+.tool-card.open .tool-body { display:block; }
+.tool-card .tool-body pre {
+  background: rgba(0,0,0,0.3); border:none; margin:0; max-height:200px; overflow-y:auto;
+}
+.tool-card .tool-body pre code { white-space:pre-wrap; word-break:break-word; color:#B0B0C0; }
+.tool-card .tool-body .tool-status { font-size:10px; color:#8888AA; margin-bottom:4px; }
+
+/* Approval dialog */
+.approval-bar {
+  display:flex; align-items:center; gap:6px;
+  padding: 6px 10px;
+  background: rgba(255,183,77,0.08);
+  border: 1px solid rgba(255,183,77,0.2);
+  border-radius: 6px;
+  margin: 6px 0;
+}
+.approval-bar .approval-msg { font-size:11px; color:#FFB74D; flex:1; }
+.approval-bar button {
+  font-family:inherit; font-size:10px; border:none; border-radius:3px;
+  padding: 3px 10px; cursor:pointer; font-weight:600;
+}
+.approval-bar .approve-btn { background:#00E5A0; color:#0D0D12; }
+.approval-bar .deny-btn { background:#3D1218; color:#FF6B6B; }
+
+/* Streaming cursor */
+.streaming-cursor::after {
+  content: '▊';
+  animation: blink 1s step-end infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* Empty state */
+#empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 10px;
+  opacity: 0.3;
+}
+#empty-state .icon { font-size: 36px; }
+#empty-state .text { font-size: 12px; }
+#empty-state .hint { font-size: 10px; color: #666680; margin-top: 8px; }
+
+/* Context chip */
+.context-chip {
+  font-size: 10px; color: #666680; text-align: center;
+  padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.03);
+  margin-bottom: 6px;
+}
+
+/* ===== INPUT ===== */
+#footer {
+  background: #0F0F18;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  padding: 10px 12px;
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+#footer textarea {
+  flex: 1;
+  font-family: inherit;
+  font-size: 13px;
+  color: #D0D0D8;
+  background: #14141E;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 12px;
+  resize: none;
+  outline: none;
+  max-height: 100px;
+  line-height: 1.55;
+}
+#footer textarea::placeholder { color: rgba(255,255,255,0.15); }
+#footer textarea:focus { box-shadow: 0 0 0 1px rgba(0,229,160,0.3); }
+#footer button {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0D0D12;
+  background: #00E5A0;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 16px;
+  cursor: pointer;
+  align-self: flex-end;
+  white-space: nowrap;
+}
+#footer button:hover { background: #00C98A; }
+#footer button:disabled { background: #2A2A3E; color: #666; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <span class="title">AI</span>
+  <span class="model-badge" id="model-badge">gpt-4o</span>
+  <label class="agent-toggle" title="Agent mode: AI can execute commands & access files">
+    <input type="checkbox" id="agent-toggle" checked>
+    <span class="switch"></span> Agent
+  </label>
+  <span class="spacer"></span>
+  <button id="clear-btn" title="Clear conversation">Clear</button>
+  <button id="stop-btn" title="Stop generating" style="display:none">Stop</button>
+  <button id="close-btn" title="Close sidebar (Escape)" class="danger">&#10005;</button>
+</div>
+
+<div id="chat">
+  <div id="empty-state">
+    <div class="icon">&#10024;</div>
+    <div class="text">Ask anything, Tab to toggle</div>
+    <div class="hint">Agent mode: AI can run commands & edit files</div>
+  </div>
+</div>
+
+<div id="footer">
+  <textarea id="input" rows="1" placeholder="Ask anything..."
+    disabled></textarea>
+  <button id="send-btn" disabled>Send</button>
+</div>
+
+<script>
+"use strict";
+
+// ====== TOOL DEFINITIONS (OpenAI format) ======
+var TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "exec",
+      description: "Execute a shell command in the terminal. Returns stdout and stderr output. Use for running code, building, testing, installing packages, or any CLI operation.",
+      parameters: {
+        type: "object",
+        properties: {
+          command: { type: "string", description: "The shell command to execute (e.g. 'dir', 'python --version', 'npm install')" }
+        },
+        required: ["command"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_file",
+      description: "Read the contents of a file. Returns the file text or an error if the file doesn't exist.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Absolute or relative path to the file" }
+        },
+        required: ["path"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "write_file",
+      description: "Write content to a file. Creates the file if it doesn't exist, overwrites if it does.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Absolute or relative path to the file" },
+          content: { type: "string", description: "The content to write to the file" }
+        },
+        required: ["path", "content"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_dir",
+      description: "List files and directories in a given path. Returns one entry per line.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Absolute or relative path to the directory. Defaults to current working directory." }
+        },
+        required: []
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_files",
+      description: "Search for files by name pattern in the filesystem.",
+      parameters: {
+        type: "object",
+        properties: {
+          pattern: { type: "string", description: "File name or wildcard pattern (e.g. '*.cs', 'README.md')" },
+          directory: { type: "string", description: "Directory to search in. Defaults to current working directory." }
+        },
+        required: ["pattern"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_context",
+      description: "Get current terminal context: working directory, OS info, recent command history, and terminal mode.",
+      parameters: { type: "object", properties: {}, required: [] }
+    }
+  }
+];
+
+// ====== SYSTEM PROMPT ======
+function buildSystemPrompt() {
+  var ctx = terminalContext || {};
+  var parts = [
+    "You are OpenNCL AI, an agent integrated into the OpenNCL terminal (v4.0).",
+    "",
+    "## Context",
+    "- Working directory: " + (ctx.cwd || "unknown"),
+    "- OS: " + (ctx.os || "Windows"),
+    "- Terminal mode: " + (ctx.mode || "normal"),
+    "- Recent commands: " + (ctx.recentCommands || "(none)"),
+    "",
+    "## Capabilities",
+    "You have access to tools that let you interact with the user's system:",
+    "- exec(command): Run shell commands in the terminal",
+    "- read_file(path): Read any file",
+    "- write_file(path, content): Create or overwrite files",
+    "- list_dir(path): List directory contents",
+    "- search_files(pattern, directory): Find files by name pattern",
+    "- get_context(): Get current terminal state",
+    "",
+    "## Rules",
+    "1. Be concise. Give the answer, not the preamble.",
+    "2. When the user asks you to do something, USE TOOLS to actually do it — don't just say what to do.",
+    "3. When generating commands, explain briefly what the command does before running it.",
+    "4. For file writes, confirm what you wrote after success.",
+    "5. If a tool returns an error, diagnose it and try an alternative approach.",
+    "6. NEVER run destructive commands (rm -rf, format, del /f /s, etc.) without explicit user confirmation.",
+    "7. Use markdown for formatting: code blocks with language tags, lists, etc.",
+    "8. For code blocks, always specify the language (e.g. ```python, ```csharp, ```bash)."
+  ];
+  return parts.join("\n");
+}
+
+// ====== SIMPLE SYNTAX HIGHLIGHTER ======
+var SYNTAX = {
+  bash: { keywords: /^(if|then|else|elif|fi|for|while|do|done|case|esac|function|return|exit|export|source|alias|echo|cd|ls|cat|grep|sed|awk|find|xargs|chmod|chown|mkdir|rmdir|cp|mv|rm|git|npm|pip|docker|kubectl|python|node|dotnet|make|cmake|curl|wget|tar|gzip|ssh|scp)\b/g, strings: [ /"[^"]*"/g, /'[^']*'/g ], comments: /#[^\n]*/g },
+  python: { keywords: /^(def|class|if|elif|else|for|while|import|from|as|return|yield|raise|try|except|finally|with|pass|break|continue|and|or|not|in|is|None|True|False|lambda|async|await|global|nonlocal)\b/g, strings: [ /"[^"]*"/g, /'[^']*'/g, /"""[\s\S]*?"""/g, /'''[\s\S]*?'''/g ], comments: /#[^\n]*/g },
+  csharp: { keywords: /^(using|namespace|class|struct|interface|enum|public|private|protected|internal|static|readonly|const|virtual|override|abstract|sealed|async|await|var|int|string|bool|void|double|float|long|byte|char|object|dynamic|new|return|if|else|for|foreach|while|do|switch|case|break|continue|try|catch|finally|throw|get|set|value|where|select|from|in|yield|partial|event|delegate|typeof|sizeof|nameof|is|as|ref|out|null|true|false)\b/g, strings: [ /"[^"]*"/g, /\$"[^"]*"/g ], comments: /\/\/[^\n]*/g },
+  javascript: { keywords: /^(const|let|var|function|class|if|else|for|while|do|switch|case|break|continue|return|try|catch|finally|throw|new|this|super|import|export|default|from|as|async|await|typeof|instanceof|in|of|void|delete|yield|true|false|null|undefined|static|get|set|extends)\b/g, strings: [ /"[^"]*"/g, /'[^']*'/g, /`[^`]*`/g ], comments: /\/\/[^\n]*/g },
+  json: { keywords: null, strings: [ /"[^"]*"/g ], comments: null }
+};
+
+function highlightCode(code, lang) {
+  var grammar = SYNTAX[lang] || SYNTAX.bash;
+  // Escape HTML
+  var html = code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // Comments
+  if (grammar.comments) {
+    html = html.replace(grammar.comments, function(m) { return '<span class="syn-cmt">'+m+'</span>'; });
+  }
+  // Strings
+  if (grammar.strings) {
+    for (var i = 0; i < grammar.strings.length; i++) {
+      html = html.replace(grammar.strings[i], function(m) { return '<span class="syn-str">'+m+'</span>'; });
+    }
+  }
+  // Keywords
+  if (grammar.keywords) {
+    html = html.replace(grammar.keywords, function(m) { return '<span class="syn-kw">'+m+'</span>'; });
+  }
+  // Numbers
+  html = html.replace(/\b(\d+\.?\d*)\b/g, '<span class="syn-num">$1</span>');
+
+  return html;
+}
+
+// ====== MARKDOWN RENDERER ======
+function renderMarkdown(text) {
+  if (!text) return '';
+
+  // Store code blocks so they don't get processed by other rules
+  var codeBlocks = [];
+  var html = text.replace(/```(\w*)\n?([\s\S]*?)```/g, function(_, lang, code) {
+    var idx = codeBlocks.length;
+    codeBlocks.push({ lang: lang || '', code: code.replace(/\n$/, '') });
+    return '\x00CODE' + idx + '\x00';
+  });
+
+  // Escape HTML (except for code block placeholders)
+  html = html.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  html = html.replace(/\x00CODE(\d+)\x00/g, function(_, i) {
+    var cb = codeBlocks[+i];
+    var hl = highlightCode(cb.code, cb.lang);
+    var langTag = cb.lang ? '<span class="lang-tag">'+cb.lang+'</span>' : '';
+    return '<pre><div class="code-header">'+langTag+'<div class="btn-group"><button onclick="copyCode(this)" data-code="'+escapeAttr(cb.code)+'">Copy</button><button class="run-btn" onclick="runCode(this)" data-code="'+escapeAttr(cb.code)+'">Run</button></div></div><code>'+hl+'</code></pre>';
+  });
+
+  // Inline code (before other formatting)
+  html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+
+  // Headings
+  html = html.replace(/^###### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^##### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^#### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+  // Bold / Italic / Strikethrough
+  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+  html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
+
+  // Horizontal rule
+  html = html.replace(/^---$/gm, '<hr>');
+
+  // Blockquote
+  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+  // Merge adjacent blockquotes
+  html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
+
+  // Unordered lists
+  html = html.replace(/^[\*\-] (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+
+  // Ordered lists
+  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+  // Re-wrap orphaned <li>s not already inside <ul>
+  var hasUl = /<ul>/.test(html);
+  if (!hasUl) {
+    html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, function(m) {
+      if (m.indexOf('<ul>') !== -1) return m;
+      return '<ol>' + m + '</ol>';
+    });
+  }
+
+  // Links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+
+  // Paragraphs: wrap lines that aren't already wrapped in block elements
+  html = html.replace(/\n\n/g, '</p><p>');
+  html = '<p>' + html + '</p>';
+  // Clean up empty paragraphs
+  html = html.replace(/<p><\/p>/g, '');
+  // Fix: don't wrap block elements in <p>
+  html = html.replace(/<p>(<(?:h[1-3]|pre|ul|ol|blockquote|hr)[\s\S]*?)<\/p>/g, '$1');
+  html = html.replace(/<p>(\s*)<\/p>/g, '$1');
+
+  return html;
+}
+
+function escapeAttr(s) {
+  return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;');
+}
+
+// ====== TOOL RESULT RENDERER ======
+function renderToolCard(toolName, args, result, error, collapsed) {
+  var icon = { exec:'&#9654;', read_file:'&#128196;', write_file:'&#9999;', list_dir:'&#128193;', search_files:'&#128269;', get_context:'&#9881;' }[toolName] || '&#9881;';
+  var displayArgs = typeof args === 'string' ? args : JSON.stringify(args);
+  if (displayArgs.length > 80) displayArgs = displayArgs.slice(0, 80) + '...';
+
+  var html = '<div class="tool-card' + (collapsed ? '' : ' open') + '">';
+  html += '<div class="tool-header" onclick="toggleToolCard(this)">';
+  html += '<span class="tool-icon">' + icon + '</span>';
+  html += '<span class="tool-name">' + toolName + '</span>';
+  html += '<span class="tool-args">' + escapeHtml(displayArgs) + '</span>';
+  html += '<span class="tool-arrow">&#9654;</span>';
+  html += '</div>';
+
+  html += '<div class="tool-body">';
+  if (error) {
+    html += '<div class="tool-status" style="color:#FF6B6B">[ERROR] ' + escapeHtml(error) + '</div>';
+  } else {
+    html += '<div class="tool-status">OK</div>';
+    if (result) {
+      var truncated = result.length > 4000 ? result.slice(0, 4000) + '\n... (truncated)' : result;
+      html += '<pre><code>' + escapeHtml(truncated) + '</code></pre>';
+    }
+  }
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ====== STATE ======
+var config = { apiUrl: '', apiKey: '', model: 'gpt-4o', provider: 'openai' };
+var messages = [];       // Internal message store for API
+var messageEls = [];     // DOM elements
+var streaming = false;
+var abortController = null;
+var terminalContext = null;  // { cwd, os, mode, recentCommands }
+var agentMode = true;
+var requireApproval = false; // Set to true for "approve each tool call"
+var pendingToolCall = null;  // For approval mode
+var agentMaxRounds = 10;
+
+// ====== DOM ======
+var chatEl = document.getElementById('chat');
+var inputEl = document.getElementById('input');
+var sendBtn = document.getElementById('send-btn');
+var badgeEl = document.getElementById('model-badge');
+var emptyEl = document.getElementById('empty-state');
+var agentToggle = document.getElementById('agent-toggle');
+var stopBtn = document.getElementById('stop-btn');
+
+// ====== C# <-> JS BRIDGE ======
+window.setConfig = function(cfg) {
+  config = cfg || {};
+  if (!config.model) config.model = 'gpt-4o';
+  if (!config.provider) config.provider = 'openai';
+  badgeEl.textContent = config.model;
+  if (config.apiKey) {
+    inputEl.disabled = false;
+    sendBtn.disabled = false;
+    inputEl.placeholder = 'Ask anything, or type a task for the agent...';
+  }
+};
+
+window.sendPrompt = function(prompt) {
+  if (typeof prompt !== 'string' || !prompt.trim()) return;
+  sendMessage(prompt.trim());
+};
+
+window.focusInput = function() {
+  if (!config.apiKey) return;
+  inputEl.disabled = false;
+  sendBtn.disabled = false;
+  inputEl.focus();
+};
+
+// C# sends context updates here
+window.setContext = function(ctx) {
+  terminalContext = ctx;
+  // Show a small context chip if chat has messages
+  if (messages.length > 0 && ctx && ctx.cwd) {
+    var chip = document.getElementById('context-chip');
+    if (chip) chip.textContent = 'cwd: ' + ctx.cwd + '  |  ' + (ctx.os || '');
+  }
+};
+
+// C# sends tool results back here
+window.onToolResult = function(callId, error, result) {
+  var entry = toolCallRegistry[callId];
+  if (!entry) return;
+  clearTimeout(entry.timeout);
+  delete toolCallRegistry[callId];
+  if (error) entry.reject(new Error(error));
+  else entry.resolve(result);
+};
+
+var toolCallRegistry = {};
+var toolCallSeq = 0;
+
+function postToHost(msg) {
+  try {
+    if (window.chrome && window.chrome.webview) {
+      window.chrome.webview.postMessage(JSON.stringify(msg));
+    }
+  } catch (e) {}
+}
+
+// Call a tool via C# bridge, returns promise<result>
+function callTool(toolName, args) {
+  return new Promise(function(resolve, reject) {
+    var callId = 'tc_' + (++toolCallSeq) + '_' + Date.now();
+    toolCallRegistry[callId] = { resolve: resolve, reject: reject, timeout: setTimeout(function() {
+      delete toolCallRegistry[callId];
+      reject(new Error('Tool call timeout (10s)'));
+    }, 10000) };
+    postToHost({ type: 'tool_call', id: callId, tool: toolName, args: args });
+  });
+}
+
+// ====== CHAT LOGIC ======
+function addMessageEl(role, content) {
+  if (emptyEl) { emptyEl.remove(); emptyEl = null; }
+
+  var row = document.createElement('div');
+  row.className = 'msg-row ' + role;
+
+  if (role === 'assistant' && content) {
+    var bubble = document.createElement('div');
+    bubble.className = 'msg-bubble md-content';
+    bubble.innerHTML = renderMarkdown(content);
+    row.appendChild(bubble);
+  } else if (role === 'assistant') {
+    var bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+    row.appendChild(bubble);
+  } else if (role === 'error') {
+    var bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+    bubble.textContent = content;
+    row.appendChild(bubble);
+  } else {
+    var bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+    bubble.textContent = content;
+    row.appendChild(bubble);
+  }
+
+  chatEl.appendChild(row);
+  scrollDown();
+  return row;
+}
+
+function getLastAssistantBubble() {
+  var rows = chatEl.querySelectorAll('.msg-row.assistant');
+  if (rows.length === 0) return null;
+  var last = rows[rows.length - 1];
+  return last.querySelector('.msg-bubble');
+}
+
+function appendTextToLastAssistant(text) {
+  var bubble = getLastAssistantBubble();
+  if (!bubble) {
+    addMessageEl('assistant', text);
+    return;
+  }
+  // Find the current raw text (unrendered)
+  var lastMsg = messages[messages.length - 1];
+  if (lastMsg && lastMsg.role === 'assistant') {
+    lastMsg.content += text;
+  } else {
+    messages.push({ role: 'assistant', content: text });
+  }
+  bubble.innerHTML = renderMarkdown(messages[messages.length - 1].content);
+  scrollDown();
+}
+
+function clearChat() {
+  messages = [];
+  chatEl.innerHTML = '';
+  emptyEl = document.createElement('div');
+  emptyEl.id = 'empty-state';
+  emptyEl.innerHTML = '<div class="icon">&#10024;</div><div class="text">Ask anything, Tab to toggle</div><div class="hint">Agent mode: AI can run commands &amp; edit files</div>';
+  chatEl.appendChild(emptyEl);
+}
+
+function scrollDown() {
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+// ====== COPY / RUN CODE ======
+window.copyCode = function(btn) {
+  var code = btn.getAttribute('data-code');
+  navigator.clipboard.writeText(code).then(function() {
+    var orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    btn.style.color = '#00E5A0';
+    setTimeout(function() { btn.textContent = orig; btn.style.color = ''; }, 1500);
+  }).catch(function() {
+    // Fallback
+    var ta = document.createElement('textarea');
+    ta.value = code; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    btn.textContent = 'Copied!';
+    setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
+  });
+};
+
+window.runCode = function(btn) {
+  var code = btn.getAttribute('data-code');
+  // Send to C# to execute in the terminal
+  postToHost({ type: 'run_in_terminal', code: code });
+  // Visual feedback
+  btn.textContent = 'Running...';
+  setTimeout(function() { btn.textContent = 'Run'; }, 1000);
+};
+
+window.toggleToolCard = function(header) {
+  var card = header.parentElement;
+  card.classList.toggle('open');
+};
+
+// ====== AGENT LOOP (Tool Calling) ======
+async function agentLoop(apiMessages) {
+  var rounds = 0;
+  while (rounds < agentMaxRounds) {
+    rounds++;
+
+    var body = JSON.stringify({
+      model: config.model,
+      messages: apiMessages,
+      tools: TOOLS,
+      tool_choice: "auto",
+      max_tokens: 4096
+    });
+
+    var resp = await fetch(config.apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + config.apiKey
+      },
+      body: body,
+      signal: abortController ? abortController.signal : undefined
+    });
+
+    if (!resp.ok) {
+      var errText = await resp.text();
+      throw new Error('API ' + resp.status + ': ' + (errText.length > 200 ? errText.slice(0,200)+'...' : errText));
+    }
+
+    var data = await resp.json();
+    var choice = data.choices && data.choices[0];
+    if (!choice) throw new Error('Empty response from API');
+
+    var msg = choice.message;
+
+    // If the model returned content, display it
+    if (msg.content && msg.content.trim()) {
+      // Already added an empty assistant message placeholder? Replace it.
+      var lastApiIdx = -1;
+      for (var i = apiMessages.length - 1; i >= 0; i--) {
+        if (apiMessages[i].role === 'assistant') { lastApiIdx = i; break; }
+      }
+      // Find or create assistant message
+      var lastUserMsg = messages[messages.length - 1];
+      if (lastUserMsg && lastUserMsg.role === 'assistant' && lastUserMsg.content === '') {
+        lastUserMsg.content = msg.content;
+      } else {
+        messages.push({ role: 'assistant', content: msg.content });
+        addMessageEl('assistant', msg.content);
+      }
+
+      // Update the last bubble
+      var bubble = getLastAssistantBubble();
+      if (bubble && messages.length > 0) {
+        var lastDisplay = messages[messages.length - 1];
+        if (lastDisplay.role === 'assistant') {
+          bubble.innerHTML = renderMarkdown(lastDisplay.content);
+        }
+      }
+    }
+
+    // Check for tool calls
+    if (!msg.tool_calls || msg.tool_calls.length === 0) {
+      // Agent loop done — final answer
+      return;
+    }
+
+    // Add assistant message with tool calls to API messages
+    apiMessages.push({ role: 'assistant', content: msg.content || null, tool_calls: msg.tool_calls });
+
+    // Execute each tool call
+    for (var t = 0; t < msg.tool_calls.length; t++) {
+      var tc = msg.tool_calls[t];
+      var toolName = tc.function.name;
+      var argsJson = tc.function.arguments;
+      var args;
+      try { args = JSON.parse(argsJson); } catch(e) { args = { _raw: argsJson }; }
+
+      // Display tool call in chat
+      var toolContainer = document.createElement('div');
+      toolContainer.className = 'msg-row assistant';
+      toolContainer.innerHTML = renderToolCard(toolName, args, null, null, true);
+      chatEl.appendChild(toolContainer);
+      scrollDown();
+
+      // Execute
+      try {
+        var result = await callTool(toolName, args);
+        // Update tool card with result
+        var card = toolContainer.querySelector('.tool-card');
+        card.classList.add('open');
+        var bodyEl = card.querySelector('.tool-body');
+        var truncated = (result || '(empty)');
+        if (truncated.length > 4000) truncated = truncated.slice(0, 4000) + '\n... (truncated)';
+        bodyEl.innerHTML = '<div class="tool-status">OK</div><pre><code>' + escapeHtml(truncated) + '</code></pre>';
+
+        apiMessages.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          content: result || '(empty)'
+        });
+      } catch (err) {
+        // Update tool card with error
+        var card2 = toolContainer.querySelector('.tool-card');
+        card2.classList.add('open');
+        var bodyEl2 = card2.querySelector('.tool-body');
+        bodyEl2.innerHTML = '<div class="tool-status" style="color:#FF6B6B">[ERROR] ' + escapeHtml(err.message) + '</div>';
+
+        apiMessages.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          content: '[ERROR] ' + (err.message || 'Unknown error')
+        });
+      }
+    }
+  }
+
+  // Max rounds reached — ask API to summarize
+  apiMessages.push({ role: 'user', content: '(Maximum agent rounds reached. Please summarize what you have done and what remains.)' });
+  var finalBody = JSON.stringify({
+    model: config.model,
+    messages: apiMessages,
+    max_tokens: 2048
+  });
+  try {
+    var finalResp = await fetch(config.apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + config.apiKey
+      },
+      body: finalBody
+    });
+    if (finalResp.ok) {
+      var finalData = await finalResp.json();
+      var finalContent = finalData.choices && finalData.choices[0] && finalData.choices[0].message && finalData.choices[0].message.content;
+      if (finalContent) {
+        messages.push({ role: 'assistant', content: finalContent });
+        addMessageEl('assistant', finalContent);
+      }
+    }
+  } catch (e) {}
+}
+
+// ====== SSE STREAMING (non-agent mode) ======
+async function sendStreaming(apiMessages) {
+  var body = JSON.stringify({
+    model: config.model,
+    messages: apiMessages,
+    stream: true,
+    max_tokens: 4096
+  });
+
+  var resp = await fetch(config.apiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + config.apiKey
+    },
+    body: body,
+    signal: abortController.signal
+  });
+
+  if (!resp.ok) {
+    var errText = await resp.text();
+    var errMsg = errText;
+    try {
+      var errJson = JSON.parse(errText);
+      if (errJson.error && errJson.error.message) errMsg = errJson.error.message;
+    } catch (_) {}
+    if (errMsg.length > 300) errMsg = errMsg.slice(0, 300) + '...';
+    addMessageEl('error', '[ERROR] API ' + resp.status + ': ' + errMsg);
+    return;
+  }
+
+  // Add empty assistant message for streaming
+  messages.push({ role: 'assistant', content: '' });
+  addMessageEl('assistant', '');
+
+  var reader = resp.body.getReader();
+  var decoder = new TextDecoder();
+  var buffer = '';
+
+  while (true) {
+    var result = await reader.read();
+    if (result.done) break;
+    buffer += decoder.decode(result.value, { stream: true });
+
+    var lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (!line.startsWith('data: ')) continue;
+
+      var data = line.slice(6);
+      if (data === '[DONE]') break;
+
+      try {
+        var chunk = JSON.parse(data);
+        var choices = chunk.choices;
+        if (!choices || choices.length === 0) continue;
+        var delta = choices[0].delta;
+        if (delta && delta.content) {
+          appendTextToLastAssistant(delta.content);
+        }
+      } catch (_) {}
+    }
+  }
+}
+
+// ====== MAIN SEND ======
+async function sendMessage(prompt) {
+  if (streaming) return;
+  if (!config.apiKey || !config.apiUrl) {
+    addMessageEl('error', '[ERROR] API key not configured. Use "config ai key <key>" in terminal.');
+    return;
+  }
+
+  messages.push({ role: 'user', content: prompt });
+  addMessageEl('user', prompt);
+
+  streaming = true;
+  sendBtn.disabled = true;
+  inputEl.disabled = true;
+  sendBtn.textContent = '...';
+  stopBtn.style.display = '';
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+
+  abortController = new AbortController();
+
+  try {
+    // Build API messages array
+    var systemContent = buildSystemPrompt();
+    var apiMessages = [{ role: 'system', content: systemContent }];
+
+    // Add conversation history
+    for (var i = 0; i < messages.length; i++) {
+      var m = messages[i];
+      if (m.role === 'user' || m.role === 'assistant') {
+        apiMessages.push({ role: m.role, content: m.content });
+      }
+    }
+
+    if (agentMode && agentToggle.checked) {
+      // Agent mode: use tool-calling loop
+      await agentLoop(apiMessages);
+    } else {
+      // Chat mode: simple streaming
+      await sendStreaming(apiMessages);
+    }
+  } catch (e) {
+    if (e.name === 'AbortError') return;
+    addMessageEl('error', '[ERROR] ' + (e.message || 'Network error'));
+  } finally {
+    streaming = false;
+    sendBtn.disabled = false;
+    inputEl.disabled = false;
+    sendBtn.textContent = 'Send';
+    stopBtn.style.display = 'none';
+    abortController = null;
+    inputEl.focus();
+  }
+}
+
+// ====== EVENT HANDLERS ======
+inputEl.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    var text = inputEl.value.trim();
+    if (text) sendMessage(text);
+  }
+  if (e.key === 'Escape') {
+    if (streaming) {
+      // Stop generation
+      if (abortController) abortController.abort();
+      postToHost({ type: 'close' });
+    } else {
+      postToHost({ type: 'close' });
+    }
+  }
+});
+
+inputEl.addEventListener('input', function() {
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
+});
+
+sendBtn.addEventListener('click', function() {
+  var text = inputEl.value.trim();
+  if (text) sendMessage(text);
+});
+
+document.getElementById('clear-btn').addEventListener('click', clearChat);
+document.getElementById('close-btn').addEventListener('click', function() {
+  postToHost({ type: 'close' });
+});
+stopBtn.addEventListener('click', function() {
+  if (abortController) abortController.abort();
+});
+
+// Agent toggle
+agentToggle.addEventListener('change', function() {
+  agentMode = agentToggle.checked;
+});
+
+// Focus input on load
+setTimeout(function() { inputEl.focus(); }, 100);
+document.body.addEventListener('click', function(e) {
+  if (e.target === inputEl) return;
+  if (config.apiKey && !streaming) {
+    inputEl.disabled = false;
+    sendBtn.disabled = false;
+    inputEl.focus();
+  }
+});
+
+// Escape to close
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    if (!streaming) postToHost({ type: 'close' });
+  }
+});
+
+// Get initial context from C# after load
+setTimeout(function() {
+  postToHost({ type: 'get_context' });
+}, 300);
+</script>
+</body>
+</html>
