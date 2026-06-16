@@ -34,7 +34,7 @@ This project is licensed under the **MIT** License.
 ---
 
 ## Navigation
-- [New](#What's the new?)
+- [New] (#What's the new?)
 - [Architecture](#architecture)
 - [Features](#features)
 - [Quick Start](#quick-start)
